@@ -393,4 +393,5 @@ export const mockAnalyzeResult = {
   amount: '1 盘 · 350g',
   nutrition: { carbs: 18, protein: 42, fat: 11, fiber: 7, sugar: 6, salt: 480 },
   aiTip: '高蛋白低碳水优选，鸡胸肉提供 42g 蛋白质，饱腹感强。',
+  confidence: 'medium',
 }

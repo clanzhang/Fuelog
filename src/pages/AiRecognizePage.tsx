@@ -2,23 +2,35 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import SolarIcon from '../components/SolarIcon'
-import NutritionGrid from '../components/NutritionGrid'
+import NutritionGrid, { type NutritionKey } from '../components/NutritionGrid'
 import { analyzeFoodImage, compressImage, type AnalyzeResult } from '../services/deepseek'
+import type { Nutrition } from '../types'
 
 type Stage = 'capture' | 'thinking' | 'result'
+
+// 判断是否微信内置浏览器（X5/WKWebView 内核）
+function isWeChat(): boolean {
+  return /MicroMessenger/i.test(navigator.userAgent)
+}
 
 export default function AiRecognizePage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const fileRef = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
+  const galleryRef = useRef<HTMLInputElement>(null)
   const [stage, setStage] = useState<Stage>('capture')
   const [image, setImage] = useState<string | null>(null)
   const [result, setResult] = useState<AnalyzeResult | null>(null)
+  const [editedKeys, setEditedKeys] = useState<NutritionKey[]>([])
+  const [caloriesEdited, setCaloriesEdited] = useState(false)
+  const [editingCalories, setEditingCalories] = useState(false)
+  const [calDraft, setCalDraft] = useState('')
+  const [wechat] = useState(isWeChat)
 
   useEffect(() => {
     // 若从相册进入，打开文件选择
     if (params.get('source') === 'gallery') {
-      fileRef.current?.click()
+      galleryRef.current?.click()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -29,6 +41,8 @@ export default function AiRecognizePage() {
     const preview = URL.createObjectURL(file)
     setImage(preview)
     setStage('thinking')
+    setEditedKeys([])
+    setCaloriesEdited(false)
     try {
       const base64 = await compressImage(file)
       const res = await analyzeFoodImage(base64)
@@ -39,13 +53,45 @@ export default function AiRecognizePage() {
     }
   }
 
+  const editCalories = () => {
+    if (!result) return
+    setEditingCalories(true)
+    setCalDraft(String(result.calories))
+  }
+
+  const commitCalories = () => {
+    setEditingCalories(false)
+    if (!result) return
+    const v = Number(calDraft)
+    if (!Number.isNaN(v)) {
+      setResult({ ...result, calories: Math.max(0, Math.round(v)) })
+      setCaloriesEdited(true)
+    }
+  }
+
+  const editNutrition = (key: NutritionKey, value: number) => {
+    if (!result) return
+    const nutrition: Nutrition = { ...result.nutrition, [key]: value }
+    setResult({ ...result, nutrition })
+    setEditedKeys((p) => (p.includes(key) ? p : [...p, key]))
+  }
+
   return (
     <div className="flex h-full flex-col bg-[#1E1E2E]">
+      {/* 拍照入口：capture="environment" 调起系统相机（微信 X5 内核兼容） */}
       <input
-        ref={fileRef}
+        ref={cameraRef}
         type="file"
         accept="image/*"
         capture="environment"
+        className="hidden"
+        onChange={handleFile}
+      />
+      {/* 相册入口：普通 file input */}
+      <input
+        ref={galleryRef}
+        type="file"
+        accept="image/*"
         className="hidden"
         onChange={handleFile}
       />
@@ -57,7 +103,7 @@ export default function AiRecognizePage() {
         ) : (
           <div className="flex h-full items-center justify-center bg-gradient-to-br from-[#2a2c4a] to-[#1E1E2E]">
             <button
-              onClick={() => fileRef.current?.click()}
+              onClick={() => cameraRef.current?.click()}
               className="flex flex-col items-center gap-3 rounded-3xl border-2 border-dashed border-white/25 px-10 py-10 text-white"
             >
               <SolarIcon name="camera" size={40} />
@@ -114,10 +160,56 @@ export default function AiRecognizePage() {
                 <p className="font-display text-lg font-extrabold text-ink">{result.name}</p>
                 <p className="text-xs text-ink/45">{result.amount}</p>
               </div>
-              <p className="font-display text-2xl font-black text-primary">{result.calories}</p>
-              <span className="text-xs text-ink/40">kcal</span>
+              <button
+                onClick={editCalories}
+                className={`flex flex-col items-center rounded-2xl px-3 py-1.5 transition active:scale-95 ${
+                  caloriesEdited ? 'bg-primary-soft ring-2 ring-primary/30' : ''
+                }`}
+              >
+                {editingCalories ? (
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    autoFocus
+                    value={calDraft}
+                    onChange={(e) => setCalDraft(e.target.value)}
+                    onBlur={commitCalories}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commitCalories()
+                      if (e.key === 'Escape') setEditingCalories(false)
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-16 rounded-lg bg-white px-1 py-0.5 text-center font-display text-2xl font-black text-primary outline-none ring-1 ring-primary/40"
+                  />
+                ) : (
+                  <span
+                    className={`font-display text-2xl font-black leading-none ${
+                      caloriesEdited ? 'text-primary' : 'text-primary'
+                    }`}
+                  >
+                    {result.calories}
+                  </span>
+                )}
+                <span className="mt-0.5 flex items-center gap-1 text-[10px] text-ink/40">
+                  kcal
+                  <SolarIcon name="edit" size={10} />
+                </span>
+              </button>
             </div>
-            <NutritionGrid nutrition={result.nutrition} />
+
+            {/* 低置信度提示 */}
+            {result.confidence === 'low' && (
+              <div className="mb-3 flex items-center gap-2 rounded-2xl bg-amber-50 px-4 py-3 text-xs font-medium text-amber-700">
+                <SolarIcon name="bolt" size={14} className="shrink-0 text-amber-500" />
+                识别可能不准确，建议手动调整数值
+              </div>
+            )}
+
+            <NutritionGrid
+              nutrition={result.nutrition}
+              onChange={editNutrition}
+              editedKeys={editedKeys}
+            />
             <div className="mt-4 flex items-center justify-center gap-4">
               <button
                 onClick={() => navigate(-1)}
@@ -147,18 +239,40 @@ export default function AiRecognizePage() {
             >
               <SolarIcon name="close" size={22} />
             </button>
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="flex h-14 w-24 items-center justify-center rounded-full bg-primary text-white shadow-fab"
-            >
-              <SolarIcon name="camera" size={24} />
-            </button>
-            <button
-              onClick={() => navigate('/diary')}
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-ink text-white"
-            >
-              <SolarIcon name="gallery" size={20} />
-            </button>
+            {/* 微信环境：拍照 + 相册 两个入口 */}
+            {wechat ? (
+              <>
+                <button
+                  onClick={() => cameraRef.current?.click()}
+                  className="flex h-14 w-24 items-center justify-center gap-1 rounded-full bg-primary text-white shadow-fab"
+                >
+                  <SolarIcon name="camera" size={22} />
+                  <span className="text-xs font-bold">拍照</span>
+                </button>
+                <button
+                  onClick={() => galleryRef.current?.click()}
+                  className="flex h-14 w-24 items-center justify-center gap-1 rounded-full bg-ink text-white"
+                >
+                  <SolarIcon name="gallery" size={22} />
+                  <span className="text-xs font-bold">相册</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => cameraRef.current?.click()}
+                  className="flex h-14 w-24 items-center justify-center rounded-full bg-primary text-white shadow-fab"
+                >
+                  <SolarIcon name="camera" size={24} />
+                </button>
+                <button
+                  onClick={() => galleryRef.current?.click()}
+                  className="flex h-14 w-14 items-center justify-center rounded-full bg-ink text-white"
+                >
+                  <SolarIcon name="gallery" size={20} />
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
