@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-[#1E1E2E] font-body text-ink antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  * {
+    -webkit-touch-callout: none;
+  }
+
+  input,
+  textarea {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* 笔记本虚线纹理 */
+.notebook-bg {
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 22px,
+    rgba(57, 66, 222, 0.06) 23px
+  );
+}
+
+/* 八角形裁剪 */
+.clip-octagon {
+  clip-path: polygon(
+    30% 0%,
+    70% 0%,
+    100% 30%,
+    100% 70%,
+    70% 100%,
+    30% 100%,
+    0% 70%,
+    0% 30%
+  );
+}
