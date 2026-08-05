@@ -1,15 +1,29 @@
-import type { Nutrition } from '../types'
-import { mockAnalyzeResult } from '../data/mock'
-
 export interface AnalyzeResult {
   name: string
   emoji: string
-  image: string
   calories: number
-  amount: string
-  nutrition: Nutrition
-  aiTip: string
+  carbs: number
+  protein: number
+  fat: number
+  fiber: number
+  sugar: number
+  sodium: number
+  tips: string
   confidence?: 'high' | 'medium' | 'low'
+}
+
+export const EMPTY_RESULT: AnalyzeResult = {
+  name: '',
+  emoji: '🍽️',
+  calories: 0,
+  carbs: 0,
+  protein: 0,
+  fat: 0,
+  fiber: 0,
+  sugar: 0,
+  sodium: 0,
+  tips: '',
+  confidence: 'low',
 }
 
 const API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY as string | undefined
@@ -56,32 +70,27 @@ function extractJson(text: string): AnalyzeResult {
   const match = text.match(/\{[\s\S]*\}/)
   if (!match) throw new Error('无法解析 AI 返回结果')
   const raw = JSON.parse(match[0])
-  // 将扁平字段归一化为六宫格 nutrition 结构
   return {
-    name: raw.name ?? mockAnalyzeResult.name,
-    emoji: raw.emoji ?? mockAnalyzeResult.emoji,
-    image: raw.image ?? mockAnalyzeResult.image,
-    calories: Number(raw.calories) ?? mockAnalyzeResult.calories,
-    amount: raw.amount ?? mockAnalyzeResult.amount,
-    nutrition: {
-      carbs: Number(raw.carbs) ?? 0,
-      protein: Number(raw.protein) ?? 0,
-      fat: Number(raw.fat) ?? 0,
-      fiber: Number(raw.fiber) ?? 0,
-      sugar: Number(raw.sugar) ?? 0,
-      salt: Number(raw.sodium) ?? 0,
-    },
-    aiTip: raw.tips ?? raw.aiTip ?? mockAnalyzeResult.aiTip,
+    name: String(raw.name ?? ''),
+    emoji: String(raw.emoji ?? '🍽️'),
+    calories: Number(raw.calories) || 0,
+    carbs: Number(raw.carbs) || 0,
+    protein: Number(raw.protein) || 0,
+    fat: Number(raw.fat) || 0,
+    fiber: Number(raw.fiber) || 0,
+    sugar: Number(raw.sugar) || 0,
+    sodium: Number(raw.sodium) || 0,
+    tips: String(raw.tips ?? raw.aiTip ?? ''),
     confidence: ['high', 'medium', 'low'].includes(raw.confidence)
       ? (raw.confidence as AnalyzeResult['confidence'])
-      : undefined,
+      : 'low',
   }
 }
 
 export async function analyzeFoodImage(base64: string): Promise<AnalyzeResult> {
   if (!API_KEY) {
-    await new Promise((r) => setTimeout(r, 1800))
-    return { ...mockAnalyzeResult, confidence: 'medium' }
+    await new Promise((r) => setTimeout(r, 1200))
+    throw new Error('未配置 API Key')
   }
 
   try {
@@ -120,19 +129,18 @@ export async function analyzeFoodImage(base64: string): Promise<AnalyzeResult> {
     if (!content) throw new Error('无返回内容')
     return extractJson(content)
   } catch (e) {
-    console.warn('[DeepSeek] 调用失败，回退到 mock 数据', e)
-    await new Promise((r) => setTimeout(r, 1200))
-    return { ...mockAnalyzeResult, confidence: 'medium' }
+    console.warn('[DeepSeek] 识别失败', e)
+    throw e
   }
 }
 
-/** 图片压缩到 1024px 以内并转 base64 */
+/** 图片压缩到 800px 以内并转 base64 */
 export function compressImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image()
     const url = URL.createObjectURL(file)
     img.onload = () => {
-      const max = 1024
+      const max = 800
       let { width, height } = img
       if (width > height && width > max) {
         height = Math.round((height * max) / width)
@@ -147,7 +155,7 @@ export function compressImage(file: File): Promise<string> {
       const ctx = canvas.getContext('2d')!
       ctx.drawImage(img, 0, 0, width, height)
       URL.revokeObjectURL(url)
-      resolve(canvas.toDataURL('image/jpeg', 0.85).split(',')[1])
+      resolve(canvas.toDataURL('image/jpeg', 0.7).split(',')[1])
     }
     img.onerror = reject
     img.src = url

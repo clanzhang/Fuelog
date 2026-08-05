@@ -3,7 +3,8 @@ import { motion } from 'framer-motion'
 import Page from '../components/Page'
 import SolarIcon from '../components/SolarIcon'
 import FoodStickerCard from '../components/FoodStickerCard'
-import { CALORIE_GOAL, DAY_STATS, FOODS, TODAY } from '../data/mock'
+import { useData, todayStr } from '../context/DataContext'
+import { MEAL_LABEL, type MealType } from '../types'
 import { useNavigate } from 'react-router-dom'
 
 function getWeekDates(anchor: string): { date: string; day: number; weekday: string; isToday: boolean }[] {
@@ -20,19 +21,20 @@ function getWeekDates(anchor: string): { date: string; day: number; weekday: str
       date: iso,
       day: dt.getDate(),
       weekday: weekdays[i],
-      isToday: iso === new Date().toISOString().slice(0, 10),
+      isToday: iso === todayStr(),
     }
   })
 }
 
 export default function DiaryPage() {
   const navigate = useNavigate()
-  const [selected, setSelected] = useState(TODAY)
+  const [selected, setSelected] = useState(todayStr())
   const week = useMemo(() => getWeekDates(selected), [selected])
+  const { settings, deleteFood, getFoodsByDate } = useData()
 
-  const stat = DAY_STATS.find((s) => s.date === selected) ?? DAY_STATS[DAY_STATS.length - 1]
-  const foods = FOODS.filter((f) => f.time)
-  const hasData = stat.consumed > 0
+  const dayFoods = getFoodsByDate(selected)
+  const consumed = dayFoods.reduce((s, f) => s + f.calories, 0)
+  const remaining = settings.dailyCalorieGoal - consumed
 
   return (
     <Page>
@@ -78,35 +80,52 @@ export default function DiaryPage() {
         <div>
           <p className="text-xs font-semibold text-ink/45">总摄入 (kcal)</p>
           <p className="mt-1 font-display text-[28px] font-extrabold leading-none text-ink">
-            {stat.consumed}
-            <span className="text-lg font-bold text-ink/30"> / {CALORIE_GOAL}</span>
+            {consumed}
+            <span className="text-lg font-bold text-ink/30"> / {settings.dailyCalorieGoal}</span>
           </p>
         </div>
         <div className="flex items-center gap-1 rounded-full bg-primary-soft px-3 py-2">
           <SolarIcon name="fire" size={16} className="text-accent-orange" />
-          <span className="text-xs font-bold text-primary">剩 {CALORIE_GOAL - stat.consumed} kcal</span>
+          <span className="text-xs font-bold text-primary">剩 {Math.max(remaining, 0)} kcal</span>
         </div>
       </motion.div>
 
       {/* 食物记录网格 */}
-      {hasData ? (
+      {dayFoods.length > 0 ? (
         <div className="grid grid-cols-2 gap-3">
-          {foods.map((f, i) => (
+          {dayFoods.map((f, i) => (
             <FoodStickerCard
               key={f.id}
               food={f}
               index={i}
               onClick={() => navigate(`/food/${f.id}`)}
+              onDelete={() => deleteFood(f.id)}
             />
           ))}
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center rounded-3xl bg-surface py-16 shadow-card">
           <span className="text-5xl">🥗</span>
-          <p className="mt-4 font-display text-base font-bold text-ink">今天还没记录饮食哦~</p>
+          <p className="mt-4 font-display text-base font-bold text-ink">今天还没有记录饮食</p>
           <p className="mt-1 text-sm text-ink/45">点击下方 + 添加第一餐</p>
+        </div>
+      )}
+
+      {/* 餐类汇总（可选显示） */}
+      {dayFoods.length > 0 && (
+        <div className="mt-5 flex flex-wrap gap-2">
+          {(['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map((m) => {
+            const items = dayFoods.filter((f) => f.mealType === m)
+            if (items.length === 0) return null
+            return (
+              <span key={m} className="rounded-full bg-primary-soft px-3 py-1 text-[11px] font-semibold text-primary">
+                {MEAL_LABEL[m]} {items.reduce((s, f) => s + f.calories, 0)} kcal
+              </span>
+            )
+          })}
         </div>
       )}
     </Page>
   )
 }
+

@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Nutrition } from '../types'
 
-export type NutritionKey = keyof Nutrition
+export type NutritionKey = 'carbs' | 'protein' | 'fat' | 'fiber' | 'sugar' | 'salt'
+
+export interface NutritionValues {
+  carbs: number
+  protein: number
+  fat: number
+  fiber: number
+  sugar: number
+  salt: number
+}
 
 const ROWS: { key: NutritionKey; label: string; unit: string }[][] = [
   [
@@ -21,7 +29,7 @@ export default function NutritionGrid({
   onChange,
   editedKeys,
 }: {
-  nutrition: Nutrition
+  nutrition: NutritionValues
   onChange?: (key: NutritionKey, value: number) => void
   editedKeys?: NutritionKey[]
 }) {

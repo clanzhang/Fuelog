@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import SolarIcon from '../components/SolarIcon'
-import NutritionGrid, { type NutritionKey } from '../components/NutritionGrid'
 import { analyzeFoodImage, type AnalyzeResult } from '../services/deepseek'
-import type { Nutrition } from '../types'
+import { useData, todayStr } from '../context/DataContext'
+import { MEAL_LABEL, type MealType } from '../types'
 
 type Stage = 'thinking' | 'result'
 
@@ -21,11 +21,11 @@ export default function AiRecognizePage() {
   const [stage, setStage] = useState<Stage>('thinking')
   const [image, setImage] = useState<string | null>(null)
   const [result, setResult] = useState<AnalyzeResult | null>(null)
-  const [editedKeys, setEditedKeys] = useState<NutritionKey[]>([])
-  const [caloriesEdited, setCaloriesEdited] = useState(false)
-  const [editingCalories, setEditingCalories] = useState(false)
-  const [calDraft, setCalDraft] = useState('')
+  const [mealType, setMealType] = useState<MealType>('breakfast')
+  const [date, setDate] = useState(todayStr())
+  const [saving, setSaving] = useState(false)
   const [wechat] = useState(isWeChat)
+  const { addFood } = useData()
 
   // 从 App 层传递来的图片（location.state.imageData）
   const imageData = (location.state as { imageData?: string } | null)?.imageData
@@ -34,8 +34,6 @@ export default function AiRecognizePage() {
     if (!imageData) return
     setImage(imageData ? `data:image/jpeg;base64,${imageData}` : null)
     setStage('thinking')
-    setEditedKeys([])
-    setCaloriesEdited(false)
     let cancelled = false
     ;(async () => {
       try {
@@ -60,8 +58,6 @@ export default function AiRecognizePage() {
     const preview = URL.createObjectURL(file)
     setImage(preview)
     setStage('thinking')
-    setEditedKeys([])
-    setCaloriesEdited(false)
     try {
       const { compressImage } = await import('../services/deepseek')
       const base64 = await compressImage(file)
@@ -73,28 +69,52 @@ export default function AiRecognizePage() {
     }
   }
 
+  const setField = (patch: Partial<AnalyzeResult>) => {
+    setResult((prev) => (prev ? { ...prev, ...patch } : prev))
+  }
+
   const editCalories = () => {
     if (!result) return
-    setEditingCalories(true)
-    setCalDraft(String(result.calories))
+    const v = Number(prompt('修改卡路里（kcal）', String(result.calories)))
+    if (!Number.isNaN(v)) setField({ calories: Math.max(0, Math.round(v)) })
   }
 
-  const commitCalories = () => {
-    setEditingCalories(false)
+  const editNutrition = (key: 'carbs' | 'protein' | 'fat' | 'fiber' | 'sugar' | 'sodium', label: string) => {
     if (!result) return
-    const v = Number(calDraft)
-    if (!Number.isNaN(v)) {
-      setResult({ ...result, calories: Math.max(0, Math.round(v)) })
-      setCaloriesEdited(true)
-    }
+    const v = Number(prompt(`修改${label}`, String(result[key])))
+    if (!Number.isNaN(v)) setField({ [key]: Math.max(0, v) } as Partial<AnalyzeResult>)
   }
 
-  const editNutrition = (key: NutritionKey, value: number) => {
-    if (!result) return
-    const nutrition: Nutrition = { ...result.nutrition, [key]: value }
-    setResult({ ...result, nutrition })
-    setEditedKeys((p) => (p.includes(key) ? p : [...p, key]))
+  const saveEntry = () => {
+    if (!result || saving) return
+    setSaving(true)
+    addFood({
+      name: result.name || '未命名食物',
+      emoji: result.emoji,
+      imageUrl: imageData ? `data:image/jpeg;base64,${imageData}` : undefined,
+      calories: result.calories,
+      carbs: result.carbs,
+      protein: result.protein,
+      fat: result.fat,
+      fiber: result.fiber,
+      sugar: result.sugar,
+      sodium: result.sodium,
+      tips: result.tips,
+      mealType,
+      date,
+    })
+    setSaving(false)
+    navigate('/diary')
   }
+
+  const nutritionCells: { key: 'carbs' | 'protein' | 'fat' | 'fiber' | 'sugar' | 'sodium'; label: string; unit: string }[] = [
+    { key: 'carbs', label: '碳水', unit: 'g' },
+    { key: 'protein', label: '蛋白质', unit: 'g' },
+    { key: 'fat', label: '脂肪', unit: 'g' },
+    { key: 'fiber', label: '纤维', unit: 'g' },
+    { key: 'sugar', label: '糖', unit: 'g' },
+    { key: 'sodium', label: '盐', unit: 'mg' },
+  ]
 
   return (
     <div className="flex h-full flex-col bg-[#1E1E2E]">
@@ -173,7 +193,7 @@ export default function AiRecognizePage() {
       </div>
 
       {/* 底部控制区 */}
-      <div className="relative z-10 rounded-t-[2rem] bg-surface px-6 pb-8 pt-4">
+      <div className="no-scrollbar relative z-10 max-h-[55%] overflow-y-auto rounded-t-[2rem] bg-surface px-6 pb-8 pt-4">
         {stage === 'result' && result ? (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             <div className="mb-3 flex items-center gap-3">
@@ -181,39 +201,21 @@ export default function AiRecognizePage() {
                 {result.emoji}
               </div>
               <div className="flex-1">
-                <p className="font-display text-lg font-extrabold text-ink">{result.name}</p>
-                <p className="text-xs text-ink/45">{result.amount}</p>
+                <input
+                  value={result.name}
+                  onChange={(e) => setField({ name: e.target.value })}
+                  placeholder="食物名称"
+                  className="w-full bg-transparent font-display text-lg font-extrabold text-ink outline-none"
+                />
+                <p className="text-xs text-ink/45">点击名称可修改</p>
               </div>
               <button
                 onClick={editCalories}
-                className={`flex flex-col items-center rounded-2xl px-3 py-1.5 transition active:scale-95 ${
-                  caloriesEdited ? 'bg-primary-soft ring-2 ring-primary/30' : ''
-                }`}
+                className="flex flex-col items-center rounded-2xl px-3 py-1.5 transition active:scale-95"
               >
-                {editingCalories ? (
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    autoFocus
-                    value={calDraft}
-                    onChange={(e) => setCalDraft(e.target.value)}
-                    onBlur={commitCalories}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') commitCalories()
-                      if (e.key === 'Escape') setEditingCalories(false)
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="w-16 rounded-lg bg-white px-1 py-0.5 text-center font-display text-2xl font-black text-primary outline-none ring-1 ring-primary/40"
-                  />
-                ) : (
-                  <span
-                    className={`font-display text-2xl font-black leading-none ${
-                      caloriesEdited ? 'text-primary' : 'text-primary'
-                    }`}
-                  >
-                    {result.calories}
-                  </span>
-                )}
+                <span className="font-display text-2xl font-black leading-none text-primary">
+                  {result.calories}
+                </span>
                 <span className="mt-0.5 flex items-center gap-1 text-[10px] text-ink/40">
                   kcal
                   <SolarIcon name="edit" size={10} />
@@ -229,11 +231,53 @@ export default function AiRecognizePage() {
               </div>
             )}
 
-            <NutritionGrid
-              nutrition={result.nutrition}
-              onChange={editNutrition}
-              editedKeys={editedKeys}
-            />
+            {/* 六宫格营养素（可编辑） */}
+            <div className="grid grid-cols-3 gap-2">
+              {nutritionCells.map((cell) => (
+                <button
+                  key={cell.key}
+                  onClick={() => editNutrition(cell.key, cell.label)}
+                  className="flex flex-col items-center rounded-2xl bg-bg py-3 transition active:scale-95"
+                >
+                  <span className="text-xs font-medium text-ink/45">{cell.label}</span>
+                  <span className="mt-0.5 font-display text-lg font-extrabold text-ink">
+                    {result[cell.key]}
+                  </span>
+                  <span className="text-[10px] text-ink/40">{cell.unit}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* 餐类选择 */}
+            <div className="mt-4">
+              <p className="mb-2 text-xs font-semibold text-ink/50">餐类</p>
+              <div className="grid grid-cols-4 gap-2">
+                {(Object.keys(MEAL_LABEL) as MealType[]).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMealType(m)}
+                    className={`rounded-full py-2 text-xs font-semibold transition ${
+                      mealType === m ? 'bg-primary text-white' : 'bg-bg text-ink/50'
+                    }`}
+                  >
+                    {MEAL_LABEL[m]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 日期选择 */}
+            <div className="mt-3 flex items-center justify-between rounded-2xl bg-bg px-4 py-3">
+              <span className="text-xs font-semibold text-ink/50">日期</span>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="bg-transparent text-sm font-semibold text-ink outline-none"
+              />
+            </div>
+
+            {/* 底部三按钮 */}
             <div className="mt-4 flex items-center justify-center gap-4">
               <button
                 onClick={() => navigate(-1)}
@@ -242,7 +286,7 @@ export default function AiRecognizePage() {
                 <SolarIcon name="close" size={22} />
               </button>
               <button
-                onClick={() => navigate('/diary')}
+                onClick={saveEntry}
                 className="flex h-14 items-center justify-center rounded-full bg-ink px-10 text-white"
               >
                 <SolarIcon name="check" size={22} />
