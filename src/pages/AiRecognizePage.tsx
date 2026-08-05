@@ -6,19 +6,22 @@ import { analyzeFoodImage, type AnalyzeResult } from '../services/deepseek'
 import { useData, todayStr } from '../context/DataContext'
 import { MEAL_LABEL, type MealType } from '../types'
 
-type Stage = 'thinking' | 'result'
+type Stage = 'idle' | 'loading' | 'success' | 'error'
 
 // 判断是否微信内置浏览器（X5/WKWebView 内核）
 function isWeChat(): boolean {
   return /MicroMessenger/i.test(navigator.userAgent)
 }
 
+// AI 识别超时时间（毫秒）
+const TIMEOUT_MS = 15000
+
 export default function AiRecognizePage() {
   const navigate = useNavigate()
   const location = useLocation()
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
-  const [stage, setStage] = useState<Stage>('thinking')
+  const [stage, setStage] = useState<Stage>('idle')
   const [image, setImage] = useState<string | null>(null)
   const [result, setResult] = useState<AnalyzeResult | null>(null)
   const [mealType, setMealType] = useState<MealType>('breakfast')
@@ -30,23 +33,36 @@ export default function AiRecognizePage() {
   // 从 App 层传递来的图片（location.state.imageData）
   const imageData = (location.state as { imageData?: string } | null)?.imageData
 
+  // 带超时的识别：loading → success / error
   useEffect(() => {
     if (!imageData) return
     setImage(imageData ? `data:image/jpeg;base64,${imageData}` : null)
-    setStage('thinking')
+    setStage('loading')
     let cancelled = false
-    ;(async () => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    const run = async () => {
       try {
+        // 15 秒超时兜底，避免一直卡在 loading
+        timer = setTimeout(() => {
+          if (!cancelled) setStage('error')
+        }, TIMEOUT_MS)
         const res = await analyzeFoodImage(imageData)
         if (cancelled) return
+        clearTimeout(timer)
         setResult(res)
-        setStage('result')
+        setStage('success')
       } catch {
-        if (!cancelled) navigate(-1)
+        if (cancelled) return
+        clearTimeout(timer)
+        setStage('error')
       }
-    })()
+    }
+    run()
+
     return () => {
       cancelled = true
+      if (timer) clearTimeout(timer)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imageData])
@@ -57,15 +73,15 @@ export default function AiRecognizePage() {
     if (!file) return
     const preview = URL.createObjectURL(file)
     setImage(preview)
-    setStage('thinking')
+    setStage('loading')
     try {
       const { compressImage } = await import('../services/deepseek')
       const base64 = await compressImage(file)
       const res = await analyzeFoodImage(base64)
       setResult(res)
-      setStage('result')
+      setStage('success')
     } catch {
-      setStage('thinking')
+      setStage('error')
     }
   }
 
@@ -163,9 +179,9 @@ export default function AiRecognizePage() {
           </div>
         )}
 
-        {/* 思考中动画 */}
+        {/* 思考中动画（loading） */}
         <AnimatePresence>
-          {stage === 'thinking' && (
+          {stage === 'loading' && image && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -194,7 +210,7 @@ export default function AiRecognizePage() {
 
       {/* 底部控制区 */}
       <div className="no-scrollbar relative z-10 max-h-[55%] overflow-y-auto rounded-t-[2rem] bg-surface px-6 pb-8 pt-4">
-        {stage === 'result' && result ? (
+        {stage === 'success' && result ? (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             <div className="mb-3 flex items-center gap-3">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-soft to-bg text-3xl">
@@ -299,7 +315,45 @@ export default function AiRecognizePage() {
               </button>
             </div>
           </motion.div>
+        ) : stage === 'error' ? (
+          /* 识别失败态 */
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center py-6">
+            <span className="text-4xl">😕</span>
+            <p className="mt-3 font-display text-base font-bold text-ink">识别失败，请重试或手动输入</p>
+            <p className="mt-1 text-xs text-ink/45">可能是网络问题或图片不清晰</p>
+            <div className="mt-5 flex gap-3">
+              <button
+                onClick={() => cameraRef.current?.click()}
+                className="rounded-full bg-ink/5 px-6 py-3 text-sm font-semibold text-ink"
+              >
+                重新选择
+              </button>
+              <button
+                onClick={() => navigate('/manual-add')}
+                className="rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white shadow-fab"
+              >
+                手动输入
+              </button>
+            </div>
+          </motion.div>
+        ) : stage === 'loading' && image ? (
+          /* loading 态底部（禁用按钮占位） */
+          <div className="flex items-center justify-center gap-4 py-2 opacity-40">
+            <button
+              onClick={() => navigate(-1)}
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-ink/5 text-ink/50"
+            >
+              <SolarIcon name="close" size={22} />
+            </button>
+            <button className="flex h-14 items-center justify-center rounded-full bg-ink/10 px-10 text-ink/40">
+              <SolarIcon name="check" size={22} />
+            </button>
+            <button className="flex h-14 w-14 items-center justify-center rounded-full bg-ink/5 text-ink/30">
+              <SolarIcon name="edit" size={20} />
+            </button>
+          </div>
         ) : (
+          /* idle 态：兜底拍照/相册入口 */
           <div className="flex items-center justify-center gap-4 py-2">
             <button
               onClick={() => navigate(-1)}
