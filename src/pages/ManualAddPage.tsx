@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import SolarIcon from '../components/SolarIcon'
 import { useData, todayStr } from '../context/DataContext'
 import { MEAL_LABEL, type MealType } from '../types'
-import { compressImage } from '../services/deepseek'
+import { compressImage } from '../utils/image'
 
 export default function ManualAddPage() {
   const navigate = useNavigate()

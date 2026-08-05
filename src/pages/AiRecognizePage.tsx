@@ -2,67 +2,100 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import SolarIcon from '../components/SolarIcon'
-import { analyzeFoodImage, type AnalyzeResult } from '../services/deepseek'
 import { useData, todayStr } from '../context/DataContext'
 import { MEAL_LABEL, type MealType } from '../types'
+import { compressImage } from '../utils/image'
+import { analyzeFood, type FoodAnalysisResult } from '../utils/ai'
+import { removeFoodBackground } from '../utils/cutout'
 
-type Stage = 'idle' | 'loading' | 'success' | 'error'
+type RecognizeStatus = 'compressing' | 'analyzing' | 'success' | 'error'
 
 // 判断是否微信内置浏览器（X5/WKWebView 内核）
 function isWeChat(): boolean {
   return /MicroMessenger/i.test(navigator.userAgent)
 }
 
-// AI 识别超时时间（毫秒）
-const TIMEOUT_MS = 15000
+// 根据当前时间自动预选餐类
+function guessMealType(): MealType {
+  const h = new Date().getHours()
+  if (h >= 6 && h < 11) return 'breakfast'
+  if (h >= 11 && h < 15) return 'lunch'
+  if (h >= 15 && h < 18) return 'snack'
+  if (h >= 18 && h < 23) return 'dinner'
+  return 'breakfast'
+}
+
+const nutritionCells: { key: keyof Pick<FoodAnalysisResult, 'carbs' | 'protein' | 'fat' | 'fiber' | 'sugar' | 'sodium'>; label: string; unit: string }[] = [
+  { key: 'carbs', label: '碳水', unit: 'g' },
+  { key: 'protein', label: '蛋白质', unit: 'g' },
+  { key: 'fat', label: '脂肪', unit: 'g' },
+  { key: 'fiber', label: '纤维', unit: 'g' },
+  { key: 'sugar', label: '糖', unit: 'g' },
+  { key: 'sodium', label: '盐', unit: 'mg' },
+]
 
 export default function AiRecognizePage() {
   const navigate = useNavigate()
   const location = useLocation()
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
-  const [stage, setStage] = useState<Stage>('idle')
-  const [image, setImage] = useState<string | null>(null)
-  const [result, setResult] = useState<AnalyzeResult | null>(null)
-  const [mealType, setMealType] = useState<MealType>('breakfast')
+  const [status, setStatus] = useState<RecognizeStatus>('compressing')
+  const [originalImage, setOriginalImage] = useState<string>('')
+  const [cutoutImage, setCutoutImage] = useState<string>('')
+  const [result, setResult] = useState<FoodAnalysisResult | null>(null)
+  const [cutoutProgress, setCutoutProgress] = useState<number | null>(null)
+  const [errorMsg, setErrorMsg] = useState('')
+  const [mealType, setMealType] = useState<MealType>(guessMealType)
   const [date, setDate] = useState(todayStr())
   const [saving, setSaving] = useState(false)
+  const [editedKeys, setEditedKeys] = useState<string[]>([])
   const [wechat] = useState(isWeChat)
   const { addFood } = useData()
 
-  // 从 App 层传递来的图片（location.state.imageData）
+  // 从 App 层传递来的图片（location.state.imageData，已压缩为 base64）
   const imageData = (location.state as { imageData?: string } | null)?.imageData
 
-  // 带超时的识别：loading → success / error
+  // 核心处理：压缩 → 并行(分析 + 抠图) → success/error
   useEffect(() => {
-    if (!imageData) return
-    setImage(imageData ? `data:image/jpeg;base64,${imageData}` : null)
-    setStage('loading')
+    if (!imageData) {
+      setStatus('error')
+      setErrorMsg('未获取到图片')
+      return
+    }
     let cancelled = false
-    let timer: ReturnType<typeof setTimeout> | undefined
+    setOriginalImage(`data:image/jpeg;base64,${imageData}`)
+    setStatus('analyzing')
+    setCutoutProgress(null)
 
     const run = async () => {
-      try {
-        // 15 秒超时兜底，避免一直卡在 loading
-        timer = setTimeout(() => {
-          if (!cancelled) setStage('error')
-        }, TIMEOUT_MS)
-        const res = await analyzeFoodImage(imageData)
-        if (cancelled) return
-        clearTimeout(timer)
-        setResult(res)
-        setStage('success')
-      } catch {
-        if (cancelled) return
-        clearTimeout(timer)
-        setStage('error')
+      // 并行：AI 分析 + 抠图（抠图失败降级用原图，不阻塞主流程）
+      const [analysis, cutout] = await Promise.allSettled([
+        analyzeFood(imageData),
+        removeFoodBackground(`data:image/jpeg;base64,${imageData}`, (p) => {
+          if (!cancelled) setCutoutProgress(p)
+        }).catch(() => null),
+      ])
+
+      if (cancelled) return
+
+      if (analysis.status === 'rejected') {
+        setStatus('error')
+        setErrorMsg('识别失败，请重试')
+        return
       }
+
+      setResult(analysis.value)
+      setCutoutImage(
+        cutout.status === 'fulfilled' && cutout.value
+          ? cutout.value
+          : `data:image/jpeg;base64,${imageData}`,
+      )
+      setStatus('success')
     }
     run()
 
     return () => {
       cancelled = true
-      if (timer) clearTimeout(timer)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imageData])
@@ -71,34 +104,58 @@ export default function AiRecognizePage() {
   const handleLocalPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const preview = URL.createObjectURL(file)
-    setImage(preview)
-    setStage('loading')
+    setStatus('compressing')
     try {
-      const { compressImage } = await import('../services/deepseek')
       const base64 = await compressImage(file)
-      const res = await analyzeFoodImage(base64)
-      setResult(res)
-      setStage('success')
+      if (!base64) throw new Error('图片压缩失败')
+      // 把 base64 存到本地 state 并触发处理
+      const dataUrl = base64.startsWith('data:') ? base64.split(',')[1] : base64
+      // 直接本地处理
+      setOriginalImage(`data:image/jpeg;base64,${dataUrl}`)
+      setStatus('analyzing')
+      setCutoutProgress(null)
+      const [analysis, cutout] = await Promise.allSettled([
+        analyzeFood(dataUrl),
+        removeFoodBackground(`data:image/jpeg;base64,${dataUrl}`, (p) => setCutoutProgress(p)).catch(() => null),
+      ])
+      if (analysis.status === 'rejected') {
+        setStatus('error')
+        setErrorMsg('识别失败，请重试')
+        return
+      }
+      setResult(analysis.value)
+      setCutoutImage(
+        cutout.status === 'fulfilled' && cutout.value
+          ? cutout.value
+          : `data:image/jpeg;base64,${dataUrl}`,
+      )
+      setStatus('success')
     } catch {
-      setStage('error')
+      setStatus('error')
+      setErrorMsg('图片处理失败，请重试')
     }
   }
 
-  const setField = (patch: Partial<AnalyzeResult>) => {
+  const setField = (patch: Partial<FoodAnalysisResult>) => {
     setResult((prev) => (prev ? { ...prev, ...patch } : prev))
   }
 
   const editCalories = () => {
     if (!result) return
     const v = Number(prompt('修改卡路里（kcal）', String(result.calories)))
-    if (!Number.isNaN(v)) setField({ calories: Math.max(0, Math.round(v)) })
+    if (!Number.isNaN(v)) {
+      setField({ calories: Math.max(0, Math.round(v)) })
+      setEditedKeys((p) => (p.includes('calories') ? p : [...p, 'calories']))
+    }
   }
 
-  const editNutrition = (key: 'carbs' | 'protein' | 'fat' | 'fiber' | 'sugar' | 'sodium', label: string) => {
+  const editNutrition = (key: keyof Pick<FoodAnalysisResult, 'carbs' | 'protein' | 'fat' | 'fiber' | 'sugar' | 'sodium'>, label: string) => {
     if (!result) return
     const v = Number(prompt(`修改${label}`, String(result[key])))
-    if (!Number.isNaN(v)) setField({ [key]: Math.max(0, v) } as Partial<AnalyzeResult>)
+    if (!Number.isNaN(v)) {
+      setField({ [key]: Math.max(0, v) } as Partial<FoodAnalysisResult>)
+      setEditedKeys((p) => (p.includes(key) ? p : [...p, key]))
+    }
   }
 
   const saveEntry = () => {
@@ -107,7 +164,8 @@ export default function AiRecognizePage() {
     addFood({
       name: result.name || '未命名食物',
       emoji: result.emoji,
-      imageUrl: imageData ? `data:image/jpeg;base64,${imageData}` : undefined,
+      imageUrl: originalImage,
+      cutoutImage,
       calories: result.calories,
       carbs: result.carbs,
       protein: result.protein,
@@ -122,15 +180,6 @@ export default function AiRecognizePage() {
     setSaving(false)
     navigate('/diary')
   }
-
-  const nutritionCells: { key: 'carbs' | 'protein' | 'fat' | 'fiber' | 'sugar' | 'sodium'; label: string; unit: string }[] = [
-    { key: 'carbs', label: '碳水', unit: 'g' },
-    { key: 'protein', label: '蛋白质', unit: 'g' },
-    { key: 'fat', label: '脂肪', unit: 'g' },
-    { key: 'fiber', label: '纤维', unit: 'g' },
-    { key: 'sugar', label: '糖', unit: 'g' },
-    { key: 'sodium', label: '盐', unit: 'mg' },
-  ]
 
   return (
     <div className="flex h-full flex-col bg-[#1E1E2E]">
@@ -151,15 +200,42 @@ export default function AiRecognizePage() {
         onChange={handleLocalPick}
       />
 
+      {/* 顶部栏 */}
+      <div className="flex items-center justify-between px-5 py-4">
+        <button
+          onClick={() => navigate('/diary')}
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white"
+        >
+          <SolarIcon name="arrow-left" size={20} />
+        </button>
+        <span className="font-display text-sm font-bold text-white">AI 识别</span>
+        <div className="h-10 w-10" />
+      </div>
+
       {/* 图片区域 */}
-      <div className="relative flex-1 overflow-hidden">
-        {image ? (
-          <img src={image} alt="食物" className="h-full w-full object-cover" />
+      <div className="relative flex-1 overflow-hidden px-4">
+        {originalImage ? (
+          <div className="relative h-full w-full overflow-hidden rounded-3xl">
+            {/* 背景：模糊原图（毛玻璃） */}
+            <img
+              src={originalImage}
+              alt=""
+              className="absolute inset-0 h-full w-full scale-110 object-cover blur-xl opacity-40"
+              draggable={false}
+            />
+            <div className="absolute inset-0 bg-black/30" />
+            {/* 前景：抠图后的食物 */}
+            {status === 'success' && cutoutImage ? (
+              <div className="absolute inset-0 flex items-center justify-center p-6">
+                <img src={cutoutImage} alt="食物" className="max-h-[70%] max-w-[80%] object-contain drop-shadow-2xl" />
+              </div>
+            ) : originalImage ? (
+              <img src={originalImage} alt="食物" className="h-full w-full object-contain" />
+            ) : null}
+          </div>
         ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-5 bg-gradient-to-br from-[#2a2c4a] to-[#1E1E2E]">
-            <p className="px-8 text-center text-sm text-white/60">
-              请选择食物照片开始识别
-            </p>
+          <div className="flex h-full flex-col items-center justify-center gap-5">
+            <p className="px-8 text-center text-sm text-white/60">请选择食物照片开始识别</p>
             <div className="flex gap-3">
               <button
                 onClick={() => cameraRef.current?.click()}
@@ -179,14 +255,14 @@ export default function AiRecognizePage() {
           </div>
         )}
 
-        {/* 思考中动画（loading） */}
+        {/* analyzing 遮罩：思考中 + 抠图进度 */}
         <AnimatePresence>
-          {stage === 'loading' && image && (
+          {status === 'analyzing' && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 flex flex-col items-center justify-center bg-[#1E1E2E]/80 backdrop-blur-sm"
+              className="absolute inset-0 flex flex-col items-center justify-center rounded-3xl bg-[#1E1E2E]/70 backdrop-blur-sm"
             >
               <motion.div
                 animate={{ rotate: 360 }}
@@ -202,66 +278,73 @@ export default function AiRecognizePage() {
               >
                 ✨ 思考中...
               </motion.p>
-              <p className="mt-1 text-xs text-white/50">正在识别食物与营养成分</p>
+              {cutoutProgress !== null && cutoutProgress < 100 && (
+                <div className="mt-4 w-48">
+                  <p className="mb-1 text-center text-[10px] text-white/60">模型加载中... {cutoutProgress}%</p>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-white/20">
+                    <div className="h-full rounded-full bg-white transition-all" style={{ width: `${cutoutProgress}%` }} />
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
       {/* 底部控制区 */}
-      <div className="no-scrollbar relative z-10 max-h-[55%] overflow-y-auto rounded-t-[2rem] bg-surface px-6 pb-8 pt-4">
-        {stage === 'success' && result ? (
+      <div className="no-scrollbar relative z-10 max-h-[52%] overflow-y-auto rounded-t-[2rem] bg-surface px-6 pb-8 pt-4">
+        {status === 'success' && result ? (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-            <div className="mb-3 flex items-center gap-3">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-soft to-bg text-3xl">
-                {result.emoji}
-              </div>
-              <div className="flex-1">
-                <input
-                  value={result.name}
-                  onChange={(e) => setField({ name: e.target.value })}
-                  placeholder="食物名称"
-                  className="w-full bg-transparent font-display text-lg font-extrabold text-ink outline-none"
-                />
-                <p className="text-xs text-ink/45">点击名称可修改</p>
-              </div>
-              <button
-                onClick={editCalories}
-                className="flex flex-col items-center rounded-2xl px-3 py-1.5 transition active:scale-95"
-              >
-                <span className="font-display text-2xl font-black leading-none text-primary">
-                  {result.calories}
-                </span>
-                <span className="mt-0.5 flex items-center gap-1 text-[10px] text-ink/40">
-                  kcal
-                  <SolarIcon name="edit" size={10} />
-                </span>
-              </button>
+            {/* 名称 */}
+            <input
+              value={result.name}
+              onChange={(e) => setField({ name: e.target.value })}
+              placeholder="食物名称"
+              className="w-full bg-transparent text-center font-display text-2xl font-black text-ink outline-none"
+            />
+            {/* 卡路里 */}
+            <button
+              onClick={editCalories}
+              className="mx-auto mt-1 flex items-center gap-2 rounded-full px-4 py-1 transition active:scale-95"
+            >
+              <span className={`font-display text-xl font-extrabold ${editedKeys.includes('calories') ? 'text-primary' : 'text-ink'}`}>
+                {result.calories} kcal
+              </span>
+              <SolarIcon name="edit" size={14} className="text-ink/40" />
+            </button>
+
+            {/* 黄色横幅 */}
+            <div className="mt-3 flex items-center justify-center gap-1 rounded-full bg-amber-400/20 py-2">
+              <span className="text-sm">🥗</span>
+              <span className="text-xs font-bold text-amber-700">拍照识别卡路里 · 记录饮食</span>
             </div>
 
             {/* 低置信度提示 */}
             {result.confidence === 'low' && (
-              <div className="mb-3 flex items-center gap-2 rounded-2xl bg-amber-50 px-4 py-3 text-xs font-medium text-amber-700">
+              <div className="mt-3 flex items-center justify-center gap-2 rounded-2xl bg-amber-50 px-4 py-2.5 text-xs font-medium text-amber-700">
                 <SolarIcon name="bolt" size={14} className="shrink-0 text-amber-500" />
-                识别可能不准确，建议手动调整数值
+                识别可能不准确，建议手动调整
               </div>
             )}
 
-            {/* 六宫格营养素（可编辑） */}
-            <div className="grid grid-cols-3 gap-2">
-              {nutritionCells.map((cell) => (
-                <button
-                  key={cell.key}
-                  onClick={() => editNutrition(cell.key, cell.label)}
-                  className="flex flex-col items-center rounded-2xl bg-bg py-3 transition active:scale-95"
-                >
-                  <span className="text-xs font-medium text-ink/45">{cell.label}</span>
-                  <span className="mt-0.5 font-display text-lg font-extrabold text-ink">
-                    {result[cell.key]}
-                  </span>
-                  <span className="text-[10px] text-ink/40">{cell.unit}</span>
-                </button>
-              ))}
+            {/* 六宫格营养素 */}
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {nutritionCells.map((cell) => {
+                const edited = editedKeys.includes(cell.key)
+                return (
+                  <button
+                    key={cell.key}
+                    onClick={() => editNutrition(cell.key, cell.label)}
+                    className={`flex flex-col items-center rounded-2xl py-3 transition active:scale-95 ${edited ? 'bg-primary-soft ring-2 ring-primary/30' : 'bg-bg'}`}
+                  >
+                    <span className="text-xs font-medium text-ink/45">{cell.label}</span>
+                    <span className={`mt-0.5 font-display text-lg font-extrabold ${edited ? 'text-primary' : 'text-ink'}`}>
+                      {result[cell.key]}
+                    </span>
+                    <span className="text-[10px] text-ink/40">{cell.unit}</span>
+                  </button>
+                )
+              })}
             </div>
 
             {/* 餐类选择 */}
@@ -296,7 +379,7 @@ export default function AiRecognizePage() {
             {/* 底部三按钮 */}
             <div className="mt-4 flex items-center justify-center gap-4">
               <button
-                onClick={() => navigate(-1)}
+                onClick={() => navigate('/diary')}
                 className="flex h-14 w-14 items-center justify-center rounded-full bg-ink/5 text-ink/50"
               >
                 <SolarIcon name="close" size={22} />
@@ -315,18 +398,17 @@ export default function AiRecognizePage() {
               </button>
             </div>
           </motion.div>
-        ) : stage === 'error' ? (
+        ) : status === 'error' ? (
           /* 识别失败态 */
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center py-6">
             <span className="text-4xl">😕</span>
-            <p className="mt-3 font-display text-base font-bold text-ink">识别失败，请重试或手动输入</p>
-            <p className="mt-1 text-xs text-ink/45">可能是网络问题或图片不清晰</p>
+            <p className="mt-3 font-display text-base font-bold text-ink">{errorMsg || '识别失败，请重试'}</p>
             <div className="mt-5 flex gap-3">
               <button
                 onClick={() => cameraRef.current?.click()}
                 className="rounded-full bg-ink/5 px-6 py-3 text-sm font-semibold text-ink"
               >
-                重新选择
+                重试
               </button>
               <button
                 onClick={() => navigate('/manual-add')}
@@ -336,13 +418,10 @@ export default function AiRecognizePage() {
               </button>
             </div>
           </motion.div>
-        ) : stage === 'loading' && image ? (
-          /* loading 态底部（禁用按钮占位） */
+        ) : status === 'analyzing' || status === 'compressing' ? (
+          /* 处理中底部（禁用占位） */
           <div className="flex items-center justify-center gap-4 py-2 opacity-40">
-            <button
-              onClick={() => navigate(-1)}
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-ink/5 text-ink/50"
-            >
+            <button className="flex h-14 w-14 items-center justify-center rounded-full bg-ink/5 text-ink/50">
               <SolarIcon name="close" size={22} />
             </button>
             <button className="flex h-14 items-center justify-center rounded-full bg-ink/10 px-10 text-ink/40">
@@ -352,51 +431,7 @@ export default function AiRecognizePage() {
               <SolarIcon name="edit" size={20} />
             </button>
           </div>
-        ) : (
-          /* idle 态：兜底拍照/相册入口 */
-          <div className="flex items-center justify-center gap-4 py-2">
-            <button
-              onClick={() => navigate(-1)}
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-ink/5 text-ink/50"
-            >
-              <SolarIcon name="close" size={22} />
-            </button>
-            {/* 微信环境：拍照 + 相册 两个入口 */}
-            {wechat ? (
-              <>
-                <button
-                  onClick={() => cameraRef.current?.click()}
-                  className="flex h-14 w-24 items-center justify-center gap-1 rounded-full bg-primary text-white shadow-fab"
-                >
-                  <SolarIcon name="camera" size={22} />
-                  <span className="text-xs font-bold">拍照</span>
-                </button>
-                <button
-                  onClick={() => galleryRef.current?.click()}
-                  className="flex h-14 w-24 items-center justify-center gap-1 rounded-full bg-ink text-white"
-                >
-                  <SolarIcon name="gallery" size={22} />
-                  <span className="text-xs font-bold">相册</span>
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={() => cameraRef.current?.click()}
-                  className="flex h-14 w-24 items-center justify-center rounded-full bg-primary text-white shadow-fab"
-                >
-                  <SolarIcon name="camera" size={24} />
-                </button>
-                <button
-                  onClick={() => galleryRef.current?.click()}
-                  className="flex h-14 w-14 items-center justify-center rounded-full bg-ink text-white"
-                >
-                  <SolarIcon name="gallery" size={20} />
-                </button>
-              </>
-            )}
-          </div>
-        )}
+        ) : null}
       </div>
     </div>
   )

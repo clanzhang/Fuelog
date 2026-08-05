@@ -6,6 +6,7 @@ export interface FoodEntry {
   name: string
   emoji?: string
   imageUrl?: string // base64 图片（压缩后）
+  cutoutImage?: string // 抠图后的透明背景 PNG
   calories: number
   carbs: number
   protein: number

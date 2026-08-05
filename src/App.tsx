@@ -11,7 +11,7 @@ import ProfilePage from './pages/ProfilePage'
 import FoodDetailPage from './pages/FoodDetailPage'
 import AiRecognizePage from './pages/AiRecognizePage'
 import ManualAddPage from './pages/ManualAddPage'
-import { compressImage } from './services/deepseek'
+import { compressImage } from './utils/image'
 
 export default function App() {
   const [sheetOpen, setSheetOpen] = useState(false)

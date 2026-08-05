@@ -110,9 +110,20 @@ export default function FoodDetailPage() {
         {/* 圆形照片 */}
         <div className="flex flex-col items-center">
           <div className="notebook-bg rounded-full border border-dashed border-primary/20 bg-[#FFFDF6] p-2 shadow-card">
-            <div className="flex h-36 w-36 items-center justify-center rounded-full bg-gradient-to-br from-primary-soft to-bg text-7xl">
-              {food.emoji || '🍽️'}
-            </div>
+            {food.cutoutImage ? (
+              <div className="flex h-36 w-36 items-center justify-center overflow-hidden">
+                <img
+                  src={food.cutoutImage}
+                  alt={food.name}
+                  className="h-full w-full object-contain"
+                  draggable={false}
+                />
+              </div>
+            ) : (
+              <div className="flex h-36 w-36 items-center justify-center rounded-full bg-gradient-to-br from-primary-soft to-bg text-7xl">
+                {food.emoji || '🍽️'}
+              </div>
+            )}
           </div>
           {editing ? (
             <input
