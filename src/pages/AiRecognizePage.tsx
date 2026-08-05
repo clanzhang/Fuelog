@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import SolarIcon from '../components/SolarIcon'
 import NutritionGrid, { type NutritionKey } from '../components/NutritionGrid'
-import { analyzeFoodImage, compressImage, type AnalyzeResult } from '../services/deepseek'
+import { analyzeFoodImage, type AnalyzeResult } from '../services/deepseek'
 import type { Nutrition } from '../types'
 
-type Stage = 'capture' | 'thinking' | 'result'
+type Stage = 'thinking' | 'result'
 
 // 判断是否微信内置浏览器（X5/WKWebView 内核）
 function isWeChat(): boolean {
@@ -15,10 +15,10 @@ function isWeChat(): boolean {
 
 export default function AiRecognizePage() {
   const navigate = useNavigate()
-  const [params] = useSearchParams()
+  const location = useLocation()
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
-  const [stage, setStage] = useState<Stage>('capture')
+  const [stage, setStage] = useState<Stage>('thinking')
   const [image, setImage] = useState<string | null>(null)
   const [result, setResult] = useState<AnalyzeResult | null>(null)
   const [editedKeys, setEditedKeys] = useState<NutritionKey[]>([])
@@ -27,15 +27,34 @@ export default function AiRecognizePage() {
   const [calDraft, setCalDraft] = useState('')
   const [wechat] = useState(isWeChat)
 
+  // 从 App 层传递来的图片（location.state.imageData）
+  const imageData = (location.state as { imageData?: string } | null)?.imageData
+
   useEffect(() => {
-    // 若从相册进入，打开文件选择
-    if (params.get('source') === 'gallery') {
-      galleryRef.current?.click()
+    if (!imageData) return
+    setImage(imageData ? `data:image/jpeg;base64,${imageData}` : null)
+    setStage('thinking')
+    setEditedKeys([])
+    setCaloriesEdited(false)
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await analyzeFoodImage(imageData)
+        if (cancelled) return
+        setResult(res)
+        setStage('result')
+      } catch {
+        if (!cancelled) navigate(-1)
+      }
+    })()
+    return () => {
+      cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [imageData])
 
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 兜底：无 state 时（如直接访问 /recognize），提供拍照/相册入口
+  const handleLocalPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     const preview = URL.createObjectURL(file)
@@ -44,12 +63,13 @@ export default function AiRecognizePage() {
     setEditedKeys([])
     setCaloriesEdited(false)
     try {
+      const { compressImage } = await import('../services/deepseek')
       const base64 = await compressImage(file)
       const res = await analyzeFoodImage(base64)
       setResult(res)
       setStage('result')
     } catch {
-      setStage('capture')
+      setStage('thinking')
     }
   }
 
@@ -78,22 +98,21 @@ export default function AiRecognizePage() {
 
   return (
     <div className="flex h-full flex-col bg-[#1E1E2E]">
-      {/* 拍照入口：capture="environment" 调起系统相机（微信 X5 内核兼容） */}
+      {/* 兜底拍照/相册 input（无 state 直接访问时使用） */}
       <input
         ref={cameraRef}
         type="file"
         accept="image/*"
         capture="environment"
         className="hidden"
-        onChange={handleFile}
+        onChange={handleLocalPick}
       />
-      {/* 相册入口：普通 file input */}
       <input
         ref={galleryRef}
         type="file"
         accept="image/*"
         className="hidden"
-        onChange={handleFile}
+        onChange={handleLocalPick}
       />
 
       {/* 图片区域 */}
@@ -101,21 +120,26 @@ export default function AiRecognizePage() {
         {image ? (
           <img src={image} alt="食物" className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-full items-center justify-center bg-gradient-to-br from-[#2a2c4a] to-[#1E1E2E]">
-            <button
-              onClick={() => cameraRef.current?.click()}
-              className="flex flex-col items-center gap-3 rounded-3xl border-2 border-dashed border-white/25 px-10 py-10 text-white"
-            >
-              <SolarIcon name="camera" size={40} />
-              <span className="text-sm font-semibold">点击拍摄食物照片</span>
-            </button>
-          </div>
-        )}
-
-        {/* 虚线选择框 */}
-        {image && stage === 'capture' && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="h-64 w-64 rounded-2xl border-2 border-dashed border-white/70" />
+          <div className="flex h-full flex-col items-center justify-center gap-5 bg-gradient-to-br from-[#2a2c4a] to-[#1E1E2E]">
+            <p className="px-8 text-center text-sm text-white/60">
+              请选择食物照片开始识别
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => cameraRef.current?.click()}
+                className="flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white shadow-fab"
+              >
+                <SolarIcon name="camera" size={20} />
+                {wechat ? '拍照' : '拍摄'}
+              </button>
+              <button
+                onClick={() => galleryRef.current?.click()}
+                className="flex items-center gap-2 rounded-full bg-white/15 px-6 py-3 text-sm font-semibold text-white"
+              >
+                <SolarIcon name="gallery" size={20} />
+                相册
+              </button>
+            </div>
           </div>
         )}
 

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import BottomTabBar from './components/BottomTabBar'
@@ -11,19 +11,38 @@ import ProfilePage from './pages/ProfilePage'
 import FoodDetailPage from './pages/FoodDetailPage'
 import AiRecognizePage from './pages/AiRecognizePage'
 import ManualAddPage from './pages/ManualAddPage'
+import { compressImage } from './services/deepseek'
 
 export default function App() {
   const [sheetOpen, setSheetOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
+  // 拍照 / 相册两个独立 input：拍照带 capture，相册不带
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const galleryInputRef = useRef<HTMLInputElement>(null)
 
   const showTabBar = ['/', '/today', '/diary', '/recipes', '/trainers', '/profile'].includes(
     location.pathname,
   )
 
+  // 读取文件 → 压缩 → 带着图片进入识别流程
+  const handlePick = async (e: React.ChangeEvent<HTMLInputElement>, source: string) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // 允许重复选择同一文件
+    if (!file) return
+    try {
+      const base64 = await compressImage(file)
+      navigate('/recognize', { state: { imageData: base64, source } })
+    } catch {
+      console.warn('[App] 图片处理失败', e)
+    }
+  }
+
   const handleSelect = (key: string) => {
-    if (key === 'camera' || key === 'gallery') {
-      navigate(`/recognize?source=${key}`)
+    if (key === 'camera') {
+      cameraInputRef.current?.click()
+    } else if (key === 'gallery') {
+      galleryInputRef.current?.click()
     } else if (key === 'manual') {
       navigate('/manual-add')
     }
@@ -46,6 +65,24 @@ export default function App() {
             <Route path="/manual-add" element={<ManualAddPage />} />
           </Routes>
         </AnimatePresence>
+
+        {/* 拍照 input：capture 调起系统相机 */}
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => handlePick(e, 'camera')}
+        />
+        {/* 相册 input：不带 capture */}
+        <input
+          ref={galleryInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => handlePick(e, 'gallery')}
+        />
 
         {showTabBar && (
           <BottomTabBar
