@@ -17,7 +17,7 @@ export default function App() {
   const location = useLocation()
   const navigate = useNavigate()
 
-  const showTabBar = ['/today', '/diary', '/recipes', '/trainers', '/profile'].includes(
+  const showTabBar = ['/', '/today', '/diary', '/recipes', '/trainers', '/profile'].includes(
     location.pathname,
   )
 
