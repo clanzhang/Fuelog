@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>Fuelog</title>
+    <script>
+      // GitHub Pages SPA 路由支持：将所有路径重定向到 index.html
+      sessionStorage.redirect = location.href
+      location.replace(
+        location.pathname.replace(/\/[^/]*$/, '/') + 'index.html',
+      )
+    </script>
+  </head>
+  <body></body>
+</html>
