@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { List, Dialog, Stepper, Picker, Button, Toast } from 'antd-mobile'
 import Page from '../components/Page'
 import SolarIcon from '../components/SolarIcon'
 import { useData } from '../context/DataContext'
@@ -15,29 +14,13 @@ const item = {
   show: { opacity: 1, y: 0, transition: { type: 'spring' as const, damping: 22 } },
 }
 
-// 目标项配置
-interface GoalItem {
-  label: string
-  key: keyof UserSettings
-  unit: string
-  icon: string
-  step: number
-}
-
-const GOALS: GoalItem[] = [
-  { label: '卡路里目标', key: 'dailyCalorieGoal', unit: 'kcal/天', icon: 'target', step: 50 },
-  { label: '碳水目标', key: 'carbsGoal', unit: 'g/天', icon: 'leaf', step: 10 },
-  { label: '蛋白质目标', key: 'proteinGoal', unit: 'g/天', icon: 'battery', step: 10 },
-  { label: '脂肪目标', key: 'fatGoal', unit: 'g/天', icon: 'donut', step: 5 },
-  { label: '饮水目标', key: 'waterGoal', unit: 'L/天', icon: 'water', step: 0.5 },
-  { label: '运动目标', key: 'exerciseGoal', unit: 'min/天', icon: 'running', step: 10 },
-]
-
 export default function ProfilePage() {
   const { foods, plans, settings, updateSettings, clearAll } = useData()
+  const [confirmClear, setConfirmClear] = useState(false)
 
-  // 统计卡片数据（保持 Tailwind）
+  // 实时统计
   const stats = useMemo(() => {
+    // 连续打卡：连续有 FoodEntry 的天数
     const dates = [...new Set(foods.map((f) => f.date))].sort().reverse()
     let streak = 0
     const seen = new Set<string>()
@@ -55,48 +38,27 @@ export default function ProfilePage() {
     ]
   }, [foods, plans])
 
-  // 编辑目标弹窗状态
-  const [editGoal, setEditGoal] = useState<GoalItem | null>(null)
-  const [editValue, setEditValue] = useState(0)
+  const editSetting = (key: keyof UserSettings, label: string, suffix = '') => {
+    const raw = prompt(`修改${label}，当前值：${settings[key]}${suffix}`, String(settings[key]))
+    if (raw === null) return
+    const v = Number(raw)
+    if (!Number.isNaN(v)) updateSettings({ [key]: v })
+  }
 
-  // 单位切换 Picker
-  const [showUnitPicker, setShowUnitPicker] = useState(false)
-  const unitColumns = [
-    [
-      { label: 'kcal', value: 'kcal' },
-      { label: 'kJ', value: 'kJ' },
-    ],
+  const settingsList = [
+    { label: '卡路里目标', value: `${settings.dailyCalorieGoal} kcal/天`, icon: 'target', key: 'dailyCalorieGoal' as const },
+    { label: '碳水目标', value: `${settings.carbsGoal} g/天`, icon: 'leaf', key: 'carbsGoal' as const },
+    { label: '蛋白质目标', value: `${settings.proteinGoal} g/天`, icon: 'battery', key: 'proteinGoal' as const },
+    { label: '脂肪目标', value: `${settings.fatGoal} g/天`, icon: 'donut', key: 'fatGoal' as const },
+    { label: '饮水目标', value: `${settings.waterGoal} L/天`, icon: 'water', key: 'waterGoal' as const },
+    { label: '运动目标', value: `${settings.exerciseGoal} min/天`, icon: 'running', key: 'exerciseGoal' as const },
+    { label: '单位切换', value: settings.unit, icon: 'settings', key: 'unit' as const },
   ]
-
-  const openEditGoal = (g: GoalItem) => {
-    setEditGoal(g)
-    setEditValue(settings[g.key] as number)
-  }
-
-  const confirmEditGoal = () => {
-    if (!editGoal) return
-    updateSettings({ [editGoal.key]: Math.max(0, editValue) })
-    setEditGoal(null)
-    Toast.show({ content: '已保存', position: 'center', duration: 1000 })
-  }
-
-  const handleClearAll = () => {
-    Dialog.confirm({
-      title: '清除所有数据',
-      content: '确定清除所有饮食记录、训练计划和设置吗？此操作不可恢复。',
-      confirmText: '确定清除',
-      cancelText: '取消',
-      onConfirm: () => {
-        clearAll()
-        Toast.show({ content: '已清除', position: 'center', duration: 1000 })
-      },
-    })
-  }
 
   return (
     <Page>
       <motion.div variants={container} initial="hidden" animate="show">
-        {/* 头像区（保持 Tailwind） */}
+        {/* 头像区 */}
         <motion.div variants={item} className="flex flex-col items-center pt-4">
           <div className="relative">
             <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary-dark font-display text-3xl font-black text-white shadow-fab">
@@ -110,7 +72,7 @@ export default function ProfilePage() {
           </p>
         </motion.div>
 
-        {/* 统计卡片（保持 Tailwind，不改） */}
+        {/* 统计 */}
         <motion.div variants={item} className="mt-6 grid grid-cols-3 gap-3">
           {stats.map((s) => (
             <div key={s.label} className="rounded-2xl bg-surface p-4 text-center shadow-card">
@@ -124,50 +86,57 @@ export default function ProfilePage() {
           ))}
         </motion.div>
 
-        {/* 目标设置 - antd List */}
+        {/* 设置 */}
         <motion.div variants={item} className="mt-6">
           <h2 className="mb-3 px-1 font-display text-base font-extrabold text-ink">目标设置</h2>
-          <div className="overflow-hidden rounded-3xl shadow-card">
-            <List>
-              {GOALS.map((g) => (
-                <List.Item
-                  key={g.key}
-                  prefix={
-                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-soft text-primary">
-                      <SolarIcon name={g.icon as never} size={18} />
-                    </span>
-                  }
-                  description={g.unit}
-                  extra={String(settings[g.key])}
-                  clickable
-                  onClick={() => openEditGoal(g)}
-                >
-                  {g.label}
-                </List.Item>
-              ))}
-              <List.Item
-                prefix={
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-soft text-primary">
-                    <SolarIcon name="settings" size={18} />
-                  </span>
-                }
-                extra={settings.unit}
-                clickable
-                onClick={() => setShowUnitPicker(true)}
+          <div className="overflow-hidden rounded-3xl bg-surface shadow-card">
+            {settingsList.map((s, i) => (
+              <button
+                key={s.label}
+                onClick={() => editSetting(s.key, s.label, s.key === 'unit' ? '' : '')}
+                className={`flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-bg ${
+                  i !== 0 ? 'border-t border-ink/5' : ''
+                }`}
               >
-                单位切换
-              </List.Item>
-            </List>
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-soft text-primary">
+                  <SolarIcon name={s.icon as never} size={18} />
+                </span>
+                <span className="flex-1 text-sm font-semibold text-ink">{s.label}</span>
+                <span className="text-xs text-ink/40">{s.value}</span>
+                <SolarIcon name="arrow-right" size={15} className="text-ink/25" />
+              </button>
+            ))}
           </div>
         </motion.div>
 
-        {/* 清除数据 - antd Button + Dialog */}
+        {/* 清除数据 */}
         <motion.div variants={item} className="mt-6">
-          <Button color="danger" fill="outline" block onClick={handleClearAll}>
-            <span className="flex items-center justify-center gap-2 text-sm font-semibold">
+          {confirmClear ? (
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmClear(false)}
+                className="flex-1 rounded-full bg-ink/5 py-3 text-sm font-semibold text-ink/60"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => {
+                  clearAll()
+                  setConfirmClear(false)
+                }}
+                className="flex-1 rounded-full bg-rose-500 py-3 text-sm font-semibold text-white"
+              >
+                确认清除
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmClear(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-full border border-rose-200 bg-rose-50 py-3 text-sm font-semibold text-rose-500"
+            >
               <SolarIcon name="trash" size={16} /> 清除所有数据
-            </span>
-          </Button>
+            </button>
+          )}
         </motion.div>
 
         {/* 底部 */}
@@ -175,47 +144,6 @@ export default function ProfilePage() {
           <p className="text-xs text-ink/35">Fuelog v1.0.0 · 健康每一天</p>
         </motion.div>
       </motion.div>
-
-      {/* 编辑目标弹窗 - antd Dialog + Stepper */}
-      <Dialog
-        visible={editGoal !== null}
-        title={editGoal ? `设置${editGoal.label}` : ''}
-        content={
-          <div className="flex items-center justify-center gap-3 py-4">
-            <Stepper
-              value={editValue}
-              onChange={setEditValue}
-              min={0}
-              step={editGoal?.step ?? 10}
-            />
-            <span className="text-sm text-ink/50">{editGoal?.unit}</span>
-          </div>
-        }
-        actions={[
-          { key: 'cancel', text: '取消' },
-          { key: 'save', text: '保存', bold: true },
-        ]}
-        onAction={(action) => {
-          if (action.key === 'save') {
-            confirmEditGoal()
-          } else {
-            setEditGoal(null)
-          }
-        }}
-      />
-
-      {/* 单位切换 - antd Picker */}
-      <Picker
-        columns={unitColumns}
-        visible={showUnitPicker}
-        onClose={() => setShowUnitPicker(false)}
-        onConfirm={(val) => {
-          const u = val[0] as 'kcal' | 'kJ'
-          updateSettings({ unit: u })
-          setShowUnitPicker(false)
-          Toast.show({ content: '已切换', position: 'center', duration: 1000 })
-        }}
-      />
     </Page>
   )
 }
