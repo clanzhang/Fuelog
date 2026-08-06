@@ -192,12 +192,22 @@ export default function AiRecognizePage() {
   const saveEntry = async () => {
     if (!result || saving) return
     setSaving(true)
-    // 立即保存（先存原图/已完成的抠图，抠图完成后自动回写）
+    // 等待抠图完成（最多 30 秒），确保保存的 cutoutImage 是抠图结果
+    let finalCutout = cutoutImage.startsWith('data:image/png') ? cutoutImage : undefined
+    if (cutoutPromiseRef.current) {
+      try {
+        const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 30000))
+        const r = await Promise.race([cutoutPromiseRef.current, timeout])
+        if (r && r.startsWith('data:image/png')) finalCutout = r
+      } catch {
+        /* 忽略 */
+      }
+    }
     const entry = addFood({
       name: result.name || '未命名食物',
       emoji: result.emoji,
       imageUrl: originalImage,
-      cutoutImage: cutoutImage.startsWith('data:image/png') ? cutoutImage : undefined,
+      cutoutImage: finalCutout,
       calories: result.calories,
       carbs: result.carbs,
       protein: result.protein,

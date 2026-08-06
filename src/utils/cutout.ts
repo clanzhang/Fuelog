@@ -1,5 +1,8 @@
 import { removeBackground } from '@imgly/background-removal'
 
+// 抠图超时（large 模型约 80MB，首次下载慢）
+const CUTOUT_TIMEOUT = 30000
+
 // 简易抠图 fallback：基于颜色/亮度分离（无外部依赖，即时完成）
 // 适合食物主体与背景对比明显的照片；效果不如 AI 抠图但可靠
 function simpleCutout(imageBase64: string): Promise<string> {
@@ -53,46 +56,108 @@ function simpleCutout(imageBase64: string): Promise<string> {
   })
 }
 
-// 抠图：优先 AI 模型，失败/超时降级为简易抠图（保证有抠图效果）
-export async function removeFoodBackground(
-  imageBase64: string,
-  onProgress?: (progress: number) => void,
-  timeoutMs = 45000,
-): Promise<string> {
+// AI 抠图：高精度模型，背景填充透明（PNG 天然透明）
+async function aiCutout(imageBase64: string, onProgress?: (progress: number) => void): Promise<string> {
   // base64 → Blob
   const res = await fetch(imageBase64)
   const blob = await res.blob()
 
-  // 调用本地 AI 模型抠图（带超时兜底）
-  const cutoutPromise = removeBackground(blob, {
+  const config = {
     output: {
-      format: 'image/png',
+      format: 'image/png' as const,
       quality: 0.9,
     },
+    // 用 fp16 模型（比默认 quint8 量化版精度更高）
+    model: 'isnet_fp16' as const,
+    device: 'gpu' as const,
+    debug: false,
     progress: (_key: string, current: number, total: number) => {
       if (total > 0 && onProgress) {
         onProgress(Math.round((current / total) * 100))
       }
     },
-  })
+  }
 
-  // 超时：超时直接抛错，调用方降级用原图
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error('抠图超时')), timeoutMs)
-  })
+  const resultBlob = await removeBackground(blob, config)
 
+  return new Promise<string>((resolve) => {
+    const reader = new FileReader()
+    reader.onload = (e) => resolve(e.target?.result as string)
+    reader.readAsDataURL(resultBlob)
+  })
+}
+
+// 抠图后处理：边缘平滑，去除锯齿和残留杂色
+async function refineCutoutEdges(cutoutBase64: string): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.width
+      canvas.height = img.height
+      const ctx = canvas.getContext('2d')!
+
+      // 先画原图
+      ctx.drawImage(img, 0, 0)
+
+      // 获取像素数据
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      const data = imageData.data
+
+      // 1. 去除边缘半透明像素（alpha < 30 的直接设为 0）
+      for (let i = 3; i < data.length; i += 4) {
+        if (data[i] < 30) {
+          data[i] = 0
+          data[i - 1] = 0
+          data[i - 2] = 0
+          data[i - 3] = 0
+        }
+      }
+
+      // 2. 去除白色/浅色边缘残留
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] > 0 && data[i] > 240 && data[i + 1] > 240 && data[i + 2] > 240) {
+          data[i] = 0
+          data[i + 1] = 0
+          data[i + 2] = 0
+          data[i + 3] = 0
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0)
+      resolve(canvas.toDataURL('image/png', 0.9))
+    }
+    img.src = cutoutBase64
+  })
+}
+
+// 整体流程：AI 抠图（large 模型）+ 边缘后处理，30 秒超时降级
+async function processCutout(
+  imageBase64: string,
+  onProgress?: (progress: number) => void,
+): Promise<string> {
   try {
-    const resultBlob = await Promise.race([cutoutPromise, timeoutPromise])
-
-    // Blob → base64
-    return await new Promise<string>((resolve) => {
-      const reader = new FileReader()
-      reader.onload = (e) => resolve(e.target?.result as string)
-      reader.readAsDataURL(resultBlob)
-    })
+    const result = await Promise.race([
+      (async () => {
+        const rawCutout = await aiCutout(imageBase64, onProgress)
+        return await refineCutoutEdges(rawCutout)
+      })(),
+      new Promise<string>((_, reject) =>
+        setTimeout(() => reject(new Error('cutout timeout')), CUTOUT_TIMEOUT),
+      ),
+    ])
+    return result as string
   } catch {
-    // AI 抠图失败/超时 → 降级简易抠图
+    // 抠图失败/超时 → 降级简易抠图（保证有抠图效果）
     onProgress?.(100)
     return simpleCutout(imageBase64)
   }
+}
+
+// 导出统一抠图入口（识别页调用）
+export function removeFoodBackground(
+  imageBase64: string,
+  onProgress?: (progress: number) => void,
+): Promise<string> {
+  return processCutout(imageBase64, onProgress)
 }
