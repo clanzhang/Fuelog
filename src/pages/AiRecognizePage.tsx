@@ -39,6 +39,8 @@ export default function AiRecognizePage() {
   const location = useLocation()
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
+  // 持有抠图 promise，保存时等待它完成
+  const cutoutPromiseRef = useRef<Promise<string | null> | null>(null)
   const [status, setStatus] = useState<RecognizeStatus>('compressing')
   const [originalImage, setOriginalImage] = useState<string>('')
   const [cutoutImage, setCutoutImage] = useState<string>('')
@@ -50,7 +52,9 @@ export default function AiRecognizePage() {
   const [saving, setSaving] = useState(false)
   const [editedKeys, setEditedKeys] = useState<string[]>([])
   const [wechat] = useState(isWeChat)
-  const { addFood } = useData()
+  const { addFood, updateFood } = useData()
+  // 记录已保存的 entry id，抠图完成后回写
+  const savedEntryIdRef = useRef<string | null>(null)
 
   // 从 App 层传递来的图片（location.state.imageData，可能是完整 dataURL 或纯 base64）
   const rawImageData = (location.state as { imageData?: string } | null)?.imageData
@@ -90,15 +94,23 @@ export default function AiRecognizePage() {
       setStatus('success')
 
       // 2. 抠图后台继续，完成后替换（失败/超时则保持原图）
-      removeFoodBackground(`data:image/jpeg;base64,${imageData}`, (p) => {
-        if (!cancelled) setCutoutProgress(p)
-      })
+      cutoutPromiseRef.current = removeFoodBackground(
+        `data:image/jpeg;base64,${imageData}`,
+        (p) => {
+          if (!cancelled) setCutoutProgress(p)
+        },
+      )
         .then((cutout) => {
-          if (!cancelled && cutout) setCutoutImage(cutout)
+          if (cutout) {
+            setCutoutImage(cutout)
+            // 若已保存，回写抠图到该记录
+            if (savedEntryIdRef.current) {
+              updateFood(savedEntryIdRef.current, { cutoutImage: cutout })
+            }
+          }
+          return cutout || null
         })
-        .catch(() => {
-          /* 抠图失败，保持原图 */
-        })
+        .catch(() => null)
     }
     run()
 
@@ -134,14 +146,21 @@ export default function AiRecognizePage() {
       setResult(analysisResult)
       setCutoutImage(`data:image/jpeg;base64,${dataUrl}`)
       setStatus('success')
-      // 2. 抠图后台继续，完成后替换
-      removeFoodBackground(`data:image/jpeg;base64,${dataUrl}`, (p) => setCutoutProgress(p))
+      // 2. 抠图后台继续，完成后替换 + 回写已保存记录
+      cutoutPromiseRef.current = removeFoodBackground(
+        `data:image/jpeg;base64,${dataUrl}`,
+        (p) => setCutoutProgress(p),
+      )
         .then((cutout) => {
-          if (cutout) setCutoutImage(cutout)
+          if (cutout) {
+            setCutoutImage(cutout)
+            if (savedEntryIdRef.current) {
+              updateFood(savedEntryIdRef.current, { cutoutImage: cutout })
+            }
+          }
+          return cutout || null
         })
-        .catch(() => {
-          /* 抠图失败，保持原图 */
-        })
+        .catch(() => null)
     } catch {
       setStatus('error')
       setErrorMsg('图片处理失败，请重试')
@@ -170,14 +189,15 @@ export default function AiRecognizePage() {
     }
   }
 
-  const saveEntry = () => {
+  const saveEntry = async () => {
     if (!result || saving) return
     setSaving(true)
-    addFood({
+    // 立即保存（先存原图/已完成的抠图，抠图完成后自动回写）
+    const entry = addFood({
       name: result.name || '未命名食物',
       emoji: result.emoji,
       imageUrl: originalImage,
-      cutoutImage,
+      cutoutImage: cutoutImage.startsWith('data:image/png') ? cutoutImage : undefined,
       calories: result.calories,
       carbs: result.carbs,
       protein: result.protein,
@@ -189,6 +209,7 @@ export default function AiRecognizePage() {
       mealType,
       date,
     })
+    savedEntryIdRef.current = entry.id
     setSaving(false)
     navigate('/diary')
   }
@@ -359,6 +380,20 @@ export default function AiRecognizePage() {
               })}
             </div>
 
+            {/* 抠图进行中提示 */}
+            {cutoutProgress !== null && cutoutProgress < 100 && (
+              <div className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-bg px-3 py-2">
+                <span className="text-[10px] text-ink/50">正在处理食物背景...</span>
+                <div className="h-1 w-24 overflow-hidden rounded-full bg-ink/10">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all"
+                    style={{ width: `${cutoutProgress}%` }}
+                  />
+                </div>
+                <span className="text-[10px] font-semibold text-primary">{cutoutProgress}%</span>
+              </div>
+            )}
+
             {/* 餐类选择 */}
             <div className="mt-4">
               <p className="mb-2 text-xs font-semibold text-ink/50">餐类</p>
@@ -392,18 +427,30 @@ export default function AiRecognizePage() {
             <div className="mt-4 flex items-center justify-center gap-4">
               <button
                 onClick={() => navigate('/diary')}
+                disabled={saving}
                 className="flex h-14 w-14 items-center justify-center rounded-full bg-ink/5 text-ink/50"
               >
                 <SolarIcon name="close" size={22} />
               </button>
               <button
                 onClick={saveEntry}
+                disabled={saving}
                 className="flex h-14 items-center justify-center rounded-full bg-ink px-10 text-white"
               >
-                <SolarIcon name="check" size={22} />
+                {saving ? (
+                  <span className="flex items-center gap-1 text-xs font-semibold">
+                    <motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}>
+                      ✨
+                    </motion.span>
+                    保存中
+                  </span>
+                ) : (
+                  <SolarIcon name="check" size={22} />
+                )}
               </button>
               <button
                 onClick={() => navigate('/manual-add')}
+                disabled={saving}
                 className="flex h-14 w-14 items-center justify-center rounded-full bg-ink/5 text-ink/50"
               >
                 <SolarIcon name="edit" size={20} />
