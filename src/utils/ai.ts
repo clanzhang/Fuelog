@@ -93,7 +93,25 @@ export async function analyzeFood(imageBase64: string): Promise<FoodAnalysisResu
       signal: controller.signal,
     })
 
-    if (!response.ok) throw new Error('API request failed')
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '')
+      // 提取服务端错误信息
+      let msg = `API 错误 ${response.status}`
+      try {
+        const err = JSON.parse(errText)
+        if (err?.error?.message) msg = err.error.message
+      } catch {
+        /* ignore */
+      }
+      // 常见错误 → 中文提示
+      if (/Authentication Fails|invalid api key|api key.*invalid/i.test(msg)) {
+        throw new Error('API Key 无效，请检查 .env 中的 VITE_DEEPSEEK_API_KEY')
+      }
+      if (/unknown variant `image_url`|image_url|vision/i.test(msg)) {
+        throw new Error('当前 DeepSeek 服务不支持图片识别，请配置支持视觉的多模态 API 或改用手动输入')
+      }
+      throw new Error(msg)
+    }
 
     const data = await response.json()
     const content = data.choices?.[0]?.message?.content

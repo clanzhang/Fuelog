@@ -80,7 +80,9 @@ export default function AiRecognizePage() {
 
       if (analysis.status === 'rejected') {
         setStatus('error')
-        setErrorMsg('识别失败，请重试')
+        setErrorMsg(
+          analysis.reason instanceof Error ? analysis.reason.message : '识别失败，请重试',
+        )
         return
       }
 
@@ -120,7 +122,9 @@ export default function AiRecognizePage() {
       ])
       if (analysis.status === 'rejected') {
         setStatus('error')
-        setErrorMsg('识别失败，请重试')
+        setErrorMsg(
+          analysis.reason instanceof Error ? analysis.reason.message : '识别失败，请重试',
+        )
         return
       }
       setResult(analysis.value)
@@ -411,7 +415,7 @@ export default function AiRecognizePage() {
                 重试
               </button>
               <button
-                onClick={() => navigate('/manual-add')}
+                onClick={() => navigate('/manual-add', { state: { imageUrl: originalImage } })}
                 className="rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white shadow-fab"
               >
                 手动输入

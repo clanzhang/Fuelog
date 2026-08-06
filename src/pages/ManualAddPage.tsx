@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import SolarIcon from '../components/SolarIcon'
 import { useData, todayStr } from '../context/DataContext'
@@ -8,8 +8,11 @@ import { compressImage } from '../utils/image'
 
 export default function ManualAddPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { addFood } = useData()
   const photoRef = useRef<HTMLInputElement>(null)
+  // 从识别页降级带入的照片（location.state.imageUrl）
+  const incomingImage = (location.state as { imageUrl?: string } | null)?.imageUrl
   const [name, setName] = useState('')
   const [calories, setCalories] = useState('')
   const [carbs, setCarbs] = useState('0')
@@ -21,7 +24,7 @@ export default function ManualAddPage() {
   const [tips, setTips] = useState('')
   const [mealType, setMealType] = useState<MealType>('breakfast')
   const [date, setDate] = useState(todayStr())
-  const [imageUrl, setImageUrl] = useState<string | undefined>(undefined)
+  const [imageUrl, setImageUrl] = useState<string | undefined>(incomingImage)
 
   const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
