@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import SolarIcon from '../components/SolarIcon'
-import NutritionGrid, { type NutritionKey } from '../components/NutritionGrid'
+import NutritionGrid from '../components/NutritionGrid'
 import { useData } from '../context/DataContext'
 import { MEAL_LABEL, type MealType } from '../types'
 
@@ -12,16 +12,8 @@ export default function FoodDetailPage() {
   const { foods, updateFood, deleteFood } = useData()
   const food = foods.find((f) => f.id === id)
   const [editing, setEditing] = useState(false)
-  const [name, setName] = useState(food?.name ?? '')
-  const [calories, setCalories] = useState(food?.calories ?? 0)
-  const [carbs, setCarbs] = useState(food?.carbs ?? 0)
-  const [protein, setProtein] = useState(food?.protein ?? 0)
-  const [fat, setFat] = useState(food?.fat ?? 0)
-  const [fiber, setFiber] = useState(food?.fiber ?? 0)
-  const [sugar, setSugar] = useState(food?.sugar ?? 0)
-  const [sodium, setSodium] = useState(food?.sodium ?? 0)
-  const [tips, setTips] = useState(food?.tips ?? '')
-  const [editedKeys, setEditedKeys] = useState<NutritionKey[]>([])
+  const [mealType, setMealType] = useState<MealType>(food?.mealType ?? 'lunch')
+  const [date, setDate] = useState(food?.date ?? '')
   const [saved, setSaved] = useState(false)
 
   if (!food) {
@@ -35,41 +27,19 @@ export default function FoodDetailPage() {
     )
   }
 
-  const nutritionMap: Record<NutritionKey, number> = {
-    carbs,
-    protein,
-    fat,
-    fiber,
-    sugar,
-    salt: sodium,
-  }
-
-  const editNutrition = (key: NutritionKey, value: number) => {
-    const setters: Record<NutritionKey, (v: number) => void> = {
-      carbs: setCarbs,
-      protein: setProtein,
-      fat: setFat,
-      fiber: setFiber,
-      sugar: setSugar,
-      salt: setSodium,
-    }
-    setters[key](value)
-    setEditedKeys((p) => (p.includes(key) ? p : [...p, key]))
+  const nutritionMap = {
+    carbs: food.carbs,
+    protein: food.protein,
+    fat: food.fat,
+    fiber: food.fiber,
+    sugar: food.sugar,
+    salt: food.sodium,
   }
 
   const saveChanges = () => {
     if (!food) return
-    updateFood(food.id, {
-      name: name.trim() || food.name,
-      calories: Math.max(0, calories),
-      carbs: Math.max(0, carbs),
-      protein: Math.max(0, protein),
-      fat: Math.max(0, fat),
-      fiber: Math.max(0, fiber),
-      sugar: Math.max(0, sugar),
-      sodium: Math.max(0, sodium),
-      tips,
-    })
+    // 名称/卡路里/营养素由 AI 定死，只能改餐类和日期
+    updateFood(food.id, { mealType, date })
     setSaved(true)
     setEditing(false)
     setTimeout(() => setSaved(false), 1500)
@@ -125,75 +95,63 @@ export default function FoodDetailPage() {
               </div>
             )}
           </div>
-          {editing ? (
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="mt-4 w-64 rounded-2xl bg-surface px-4 py-2 text-center font-display text-2xl font-black text-ink outline-none ring-2 ring-primary/40"
-            />
-          ) : (
-            <h1 className="mt-4 font-display text-2xl font-black text-ink">{name}</h1>
-          )}
+          {/* 名称只读 */}
+          <h1 className="mt-4 font-display text-2xl font-black text-ink">{food.name}</h1>
           <p className="mt-1 flex items-center gap-2 text-sm font-medium text-ink/45">
             {MEAL_LABEL[food.mealType as MealType]} · {food.date}
           </p>
-          {/* 卡路里大数字可点击编辑 */}
-          <button
-            onClick={() => {
-              if (!editing) {
-                setEditing(true)
-                return
-              }
-              const v = Number(prompt('修改卡路里（kcal）', String(calories)))
-              if (!Number.isNaN(v)) setCalories(Math.max(0, Math.round(v)))
-            }}
-            className={`mt-3 flex flex-col items-center rounded-2xl px-4 py-1 transition active:scale-95 ${
-              editing ? 'bg-primary-soft ring-2 ring-primary/30' : ''
-            }`}
-          >
+          {/* 卡路里只读（无编辑图标） */}
+          <div className="mt-3 flex flex-col items-center rounded-2xl px-4 py-1">
             <span className="font-display text-[28px] font-extrabold leading-none text-primary">
-              {calories}
+              {food.calories}
             </span>
-            <span className="mt-0.5 flex items-center gap-1 text-[10px] text-ink/40">
-              kcal
-              <SolarIcon name="edit" size={10} />
-            </span>
-          </button>
+            <span className="mt-0.5 text-[10px] text-ink/40">kcal</span>
+          </div>
         </div>
 
-        {/* 营养素六宫格（可编辑） */}
+        {/* 营养素六宫格（只读，无提示、不可点击） */}
         <div className="mt-6">
-          <p className="mb-2 flex items-center gap-1 px-1 text-sm font-bold text-ink">
-            营养成分
-            <span className="text-[10px] font-normal text-ink/40">（点击数值可修改）</span>
-          </p>
-          <NutritionGrid
-            nutrition={nutritionMap}
-            onChange={editing ? editNutrition : undefined}
-            editedKeys={editedKeys}
-          />
+          <p className="mb-2 px-1 text-sm font-bold text-ink">营养成分</p>
+          <NutritionGrid nutrition={nutritionMap} />
         </div>
 
         {/* AI Tips */}
-        {(food.tips || editing) && (
+        {food.tips && (
           <div className="mt-5 flex gap-3 rounded-2xl border border-primary/10 bg-primary-soft p-4">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-white">
               <SolarIcon name="bolt" size={18} />
             </span>
             <div className="flex-1">
               <p className="text-xs font-bold text-primary">AI Tips</p>
-              {editing ? (
-                <textarea
-                  value={tips}
-                  onChange={(e) => setTips(e.target.value)}
-                  rows={3}
-                  placeholder="记录这条饮食的小贴士..."
-                  className="mt-1 w-full resize-none rounded-xl bg-white/70 px-3 py-2 text-xs leading-relaxed text-ink/70 outline-none ring-1 ring-primary/30"
-                />
-              ) : (
-                <p className="mt-1 text-xs leading-relaxed text-ink/70">{food.tips || '暂无备注'}</p>
-              )}
+              <p className="mt-1 text-xs leading-relaxed text-ink/70">{food.tips || '暂无备注'}</p>
             </div>
+          </div>
+        )}
+
+        {/* 编辑模式：仅修改餐类和日期 */}
+        {editing && (
+          <div className="mt-5 rounded-2xl bg-surface p-4 shadow-card">
+            <p className="mb-3 text-xs font-semibold text-ink/50">餐类</p>
+            <div className="grid grid-cols-4 gap-2">
+              {(Object.keys(MEAL_LABEL) as MealType[]).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setMealType(m)}
+                  className={`rounded-full py-2 text-xs font-semibold transition ${
+                    mealType === m ? 'bg-primary text-white' : 'bg-bg text-ink/50'
+                  }`}
+                >
+                  {MEAL_LABEL[m]}
+                </button>
+              ))}
+            </div>
+            <p className="mb-2 mt-4 text-xs font-semibold text-ink/50">日期</p>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full rounded-xl bg-bg px-4 py-3 text-sm font-semibold text-ink outline-none"
+            />
           </div>
         )}
 
@@ -217,7 +175,11 @@ export default function FoodDetailPage() {
           ) : (
             <>
               <button
-                onClick={() => setEditing(true)}
+                onClick={() => {
+                  setMealType(food.mealType)
+                  setDate(food.date)
+                  setEditing(true)
+                }}
                 className="flex flex-1 items-center justify-center gap-2 rounded-full border border-ink/10 bg-surface py-3.5 text-sm font-semibold text-ink"
               >
                 <SolarIcon name="edit" size={16} /> 编辑

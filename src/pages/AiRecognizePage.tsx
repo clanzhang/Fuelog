@@ -196,7 +196,7 @@ export default function AiRecognizePage() {
     let finalCutout = cutoutImage.startsWith('data:image/png') ? cutoutImage : undefined
     if (cutoutPromiseRef.current) {
       try {
-        const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 30000))
+        const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 60000))
         const r = await Promise.race([cutoutPromiseRef.current, timeout])
         if (r && r.startsWith('data:image/png')) finalCutout = r
       } catch {

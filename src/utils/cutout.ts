@@ -1,7 +1,35 @@
 import { removeBackground } from '@imgly/background-removal'
 
-// 抠图超时（large 模型约 80MB，首次下载慢）
-const CUTOUT_TIMEOUT = 30000
+// 整体抠图超时（首次含模型下载约 25s + 推理；已缓存时秒级完成）
+const INFER_TIMEOUT = 45000
+
+// ---- 环境检测 ----
+
+// 1. 是否支持 WebAssembly（@imgly 依赖 WASM 运行时，微信 X5 旧内核可能不支持）
+function isCutoutSupported(): boolean {
+  try {
+    return typeof WebAssembly !== 'undefined'
+  } catch {
+    return false
+  }
+}
+
+// 2. 是否支持 WebGPU（决定 device 参数；不支持时回退 CPU，避免硬编码 gpu 直接失败）
+async function hasWebGPU(): Promise<boolean> {
+  try {
+    const gpu = (navigator as unknown as { gpu?: { requestAdapter?: () => Promise<unknown> } }).gpu
+    if (!gpu?.requestAdapter) return false
+    const adapter = await gpu.requestAdapter()
+    return !!adapter
+  } catch {
+    return false
+  }
+}
+
+// 3. 是否微信内置浏览器（模型下载在 X5 内核极不稳定，优先走 CPU + 更小模型）
+function isWeChat(): boolean {
+  return /MicroMessenger/i.test(navigator.userAgent)
+}
 
 // 简易抠图 fallback：基于颜色/亮度分离（无外部依赖，即时完成）
 // 适合食物主体与背景对比明显的照片；效果不如 AI 抠图但可靠
@@ -57,19 +85,30 @@ function simpleCutout(imageBase64: string): Promise<string> {
 }
 
 // AI 抠图：高精度模型，背景填充透明（PNG 天然透明）
+// 注意：removeBackground 内部自带模型缓存（首次下载后，后续秒级完成），无需手动 preload
 async function aiCutout(imageBase64: string, onProgress?: (progress: number) => void): Promise<string> {
-  // base64 → Blob
-  const res = await fetch(imageBase64)
+  // 确保传入完整 data URL（@imgly 内部用 fetch(dataUrl) 转 blob，缺前缀会失败）
+  const dataUrl = imageBase64.startsWith('data:')
+    ? imageBase64
+    : `data:image/jpeg;base64,${imageBase64}`
+
+  console.log('[cutout] starting, dataUrl length:', dataUrl.length)
+  const res = await fetch(dataUrl)
   const blob = await res.blob()
+  console.log('[cutout] blob size:', blob.size, 'type:', blob.type)
+
+  const gpu = await hasWebGPU()
+  const model = isWeChat() ? ('isnet_quint8' as const) : ('isnet_fp16' as const)
+  const device = (gpu ? 'gpu' : 'cpu') as 'gpu' | 'cpu'
+  console.log('[cutout] using model:', model, 'device:', device)
 
   const config = {
     output: {
       format: 'image/png' as const,
       quality: 0.9,
     },
-    // 用 fp16 模型（比默认 quint8 量化版精度更高）
-    model: 'isnet_fp16' as const,
-    device: 'gpu' as const,
+    model,
+    device,
     debug: false,
     progress: (_key: string, current: number, total: number) => {
       if (total > 0 && onProgress) {
@@ -79,6 +118,7 @@ async function aiCutout(imageBase64: string, onProgress?: (progress: number) => 
   }
 
   const resultBlob = await removeBackground(blob, config)
+  console.log('[cutout] result blob size:', resultBlob.size, 'type:', resultBlob.type)
 
   return new Promise<string>((resolve) => {
     const reader = new FileReader()
@@ -131,11 +171,18 @@ async function refineCutoutEdges(cutoutBase64: string): Promise<string> {
   })
 }
 
-// 整体流程：AI 抠图（large 模型）+ 边缘后处理，30 秒超时降级
+// 整体流程：AI 抠图 + 边缘后处理，超时降级
 async function processCutout(
   imageBase64: string,
   onProgress?: (progress: number) => void,
 ): Promise<string> {
+  // 环境不支持 → 直接跳过 AI，用简易抠图兜底
+  if (!isCutoutSupported()) {
+    console.log('[cutout] WebAssembly not supported, skip AI -> simpleCutout')
+    onProgress?.(100)
+    return simpleCutout(imageBase64)
+  }
+
   try {
     const result = await Promise.race([
       (async () => {
@@ -143,12 +190,14 @@ async function processCutout(
         return await refineCutoutEdges(rawCutout)
       })(),
       new Promise<string>((_, reject) =>
-        setTimeout(() => reject(new Error('cutout timeout')), CUTOUT_TIMEOUT),
+        setTimeout(() => reject(new Error('cutout timeout')), INFER_TIMEOUT),
       ),
     ])
+    console.log('[cutout] success, base64 length:', (result as string).length)
     return result as string
-  } catch {
+  } catch (err) {
     // 抠图失败/超时 → 降级简易抠图（保证有抠图效果）
+    console.error('[cutout] failed, fallback to simpleCutout:', err)
     onProgress?.(100)
     return simpleCutout(imageBase64)
   }
