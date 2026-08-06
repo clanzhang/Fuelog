@@ -16,7 +16,12 @@ function getWeekDates(anchor: string): { date: string; day: number; weekday: str
   return Array.from({ length: 7 }, (_, i) => {
     const dt = new Date(monday)
     dt.setDate(monday.getDate() + i)
-    const iso = dt.toISOString().slice(0, 10)
+    // 注意：不能用 toISOString()，它会按 UTC 时区偏移一天（东八区会取到前一天）
+    // 用本地日期格式化，保证 date 与显示的数字一致
+    const y = dt.getFullYear()
+    const m = String(dt.getMonth() + 1).padStart(2, '0')
+    const day = String(dt.getDate()).padStart(2, '0')
+    const iso = `${y}-${m}-${day}`
     return {
       date: iso,
       day: dt.getDate(),

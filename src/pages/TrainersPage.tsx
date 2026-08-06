@@ -29,7 +29,8 @@ export default function TrainersPage() {
     return WEEK_LABEL.map((label, i) => {
       const d = new Date(monday)
       d.setDate(monday.getDate() + i)
-      const iso = d.toISOString().slice(0, 10)
+      // 用本地日期格式化（toISOString 会按 UTC 偏移一天）
+      const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
       const burned = plans
         .filter((p) => p.date === iso)
         .reduce((s, p) => s + p.caloriesBurned, 0)

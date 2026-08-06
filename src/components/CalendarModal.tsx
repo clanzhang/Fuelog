@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import SolarIcon from './SolarIcon'
+import { todayStr } from '../types'
 
 export default function CalendarModal({
   open,
@@ -89,7 +90,7 @@ export default function CalendarModal({
                       className={`relative mx-auto flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold transition active:scale-90 ${
                         date === selected
                           ? 'bg-primary text-white'
-                          : date === new Date().toISOString().slice(0, 10)
+                          : date === todayStr()
                             ? 'text-primary'
                             : 'text-ink'
                       }`}
