@@ -25,18 +25,18 @@ export default function FoodStickerCard({
     >
       <button onClick={onClick} className="flex-1 text-left">
         <div className="relative">
-          {/* 优先显示抠图版：透明背景融入卡片 */}
-          {food.cutoutImage ? (
-            <div className="flex h-28 w-full items-center justify-center overflow-hidden">
+          {/* 有照片：原图 + 圆形裁剪 */}
+          {food.imageUrl ? (
+            <div className="mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border border-primary/10 bg-white shadow-sm">
               <img
-                src={food.cutoutImage}
+                src={food.imageUrl}
                 alt={food.name}
-                className="h-full w-full object-contain"
+                className="h-full w-full object-cover"
                 draggable={false}
               />
             </div>
           ) : (
-            /* 白色边框 + 虚线内圈 + 八角形照片（无抠图时） */
+            /* 无照片：白色边框 + 虚线内圈 + 八角形 emoji */
             <div className="clip-octagon rounded-md bg-white p-1 shadow-sm">
               <div className="clip-octagon flex h-24 w-full items-center justify-center bg-gradient-to-br from-primary-soft to-bg text-5xl">
                 <span className="drop-shadow-sm">{food.emoji || '🍽️'}</span>

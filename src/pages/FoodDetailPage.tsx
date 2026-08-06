@@ -80,12 +80,12 @@ export default function FoodDetailPage() {
         {/* 圆形照片 */}
         <div className="flex flex-col items-center">
           <div className="notebook-bg rounded-full border border-dashed border-primary/20 bg-[#FFFDF6] p-2 shadow-card">
-            {food.cutoutImage ? (
-              <div className="flex h-36 w-36 items-center justify-center overflow-hidden">
+            {food.imageUrl ? (
+              <div className="flex h-36 w-36 items-center justify-center overflow-hidden rounded-full">
                 <img
-                  src={food.cutoutImage}
+                  src={food.imageUrl}
                   alt={food.name}
-                  className="h-full w-full object-contain"
+                  className="h-full w-full object-cover"
                   draggable={false}
                 />
               </div>

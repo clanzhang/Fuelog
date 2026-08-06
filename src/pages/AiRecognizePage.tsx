@@ -6,7 +6,6 @@ import { useData, todayStr } from '../context/DataContext'
 import { MEAL_LABEL, type MealType } from '../types'
 import { compressImage } from '../utils/image'
 import { analyzeFood, type FoodAnalysisResult } from '../utils/ai'
-import { removeFoodBackground } from '../utils/cutout'
 
 type RecognizeStatus = 'compressing' | 'analyzing' | 'success' | 'error'
 
@@ -39,22 +38,16 @@ export default function AiRecognizePage() {
   const location = useLocation()
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
-  // 持有抠图 promise，保存时等待它完成
-  const cutoutPromiseRef = useRef<Promise<string | null> | null>(null)
   const [status, setStatus] = useState<RecognizeStatus>('compressing')
   const [originalImage, setOriginalImage] = useState<string>('')
-  const [cutoutImage, setCutoutImage] = useState<string>('')
   const [result, setResult] = useState<FoodAnalysisResult | null>(null)
-  const [cutoutProgress, setCutoutProgress] = useState<number | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
   const [mealType, setMealType] = useState<MealType>(guessMealType)
   const [date, setDate] = useState(todayStr())
   const [saving, setSaving] = useState(false)
   const [editedKeys, setEditedKeys] = useState<string[]>([])
   const [wechat] = useState(isWeChat)
-  const { addFood, updateFood } = useData()
-  // 记录已保存的 entry id，抠图完成后回写
-  const savedEntryIdRef = useRef<string | null>(null)
+  const { addFood } = useData()
 
   // 从 App 层传递来的图片（location.state.imageData，可能是完整 dataURL 或纯 base64）
   const rawImageData = (location.state as { imageData?: string } | null)?.imageData
@@ -63,7 +56,7 @@ export default function AiRecognizePage() {
     ? rawImageData.replace(/^data:image\/[^;]+;base64,/, '')
     : undefined
 
-  // 核心处理：压缩 → 分析 + 抠图（分析完成立即展示，抠图后台继续）
+  // 核心处理：压缩 → AI 分析（展示原图）
   useEffect(() => {
     if (!imageData) {
       setStatus('error')
@@ -73,10 +66,9 @@ export default function AiRecognizePage() {
     let cancelled = false
     setOriginalImage(`data:image/jpeg;base64,${imageData}`)
     setStatus('analyzing')
-    setCutoutProgress(null)
 
     const run = async () => {
-      // 1. AI 分析（先完成先展示）
+      // AI 分析
       let analysisResult: FoodAnalysisResult | null = null
       try {
         analysisResult = await analyzeFood(imageData)
@@ -88,29 +80,9 @@ export default function AiRecognizePage() {
       }
       if (cancelled) return
 
-      // 分析成功 → 立即展示结果（先用原图，抠图后替换）
+      // 分析成功 → 展示结果（原图 + 圆形裁剪）
       setResult(analysisResult)
-      setCutoutImage(`data:image/jpeg;base64,${imageData}`)
       setStatus('success')
-
-      // 2. 抠图后台继续，完成后替换（失败/超时则保持原图）
-      cutoutPromiseRef.current = removeFoodBackground(
-        `data:image/jpeg;base64,${imageData}`,
-        (p) => {
-          if (!cancelled) setCutoutProgress(p)
-        },
-      )
-        .then((cutout) => {
-          if (cutout) {
-            setCutoutImage(cutout)
-            // 若已保存，回写抠图到该记录
-            if (savedEntryIdRef.current) {
-              updateFood(savedEntryIdRef.current, { cutoutImage: cutout })
-            }
-          }
-          return cutout || null
-        })
-        .catch(() => null)
     }
     run()
 
@@ -133,8 +105,7 @@ export default function AiRecognizePage() {
       // 直接本地处理
       setOriginalImage(`data:image/jpeg;base64,${dataUrl}`)
       setStatus('analyzing')
-      setCutoutProgress(null)
-      // 1. AI 分析（先完成先展示）
+      // AI 分析
       let analysisResult: FoodAnalysisResult | null = null
       try {
         analysisResult = await analyzeFood(dataUrl)
@@ -144,23 +115,7 @@ export default function AiRecognizePage() {
         return
       }
       setResult(analysisResult)
-      setCutoutImage(`data:image/jpeg;base64,${dataUrl}`)
       setStatus('success')
-      // 2. 抠图后台继续，完成后替换 + 回写已保存记录
-      cutoutPromiseRef.current = removeFoodBackground(
-        `data:image/jpeg;base64,${dataUrl}`,
-        (p) => setCutoutProgress(p),
-      )
-        .then((cutout) => {
-          if (cutout) {
-            setCutoutImage(cutout)
-            if (savedEntryIdRef.current) {
-              updateFood(savedEntryIdRef.current, { cutoutImage: cutout })
-            }
-          }
-          return cutout || null
-        })
-        .catch(() => null)
     } catch {
       setStatus('error')
       setErrorMsg('图片处理失败，请重试')
@@ -192,22 +147,10 @@ export default function AiRecognizePage() {
   const saveEntry = async () => {
     if (!result || saving) return
     setSaving(true)
-    // 等待抠图完成（最多 30 秒），确保保存的 cutoutImage 是抠图结果
-    let finalCutout = cutoutImage.startsWith('data:image/png') ? cutoutImage : undefined
-    if (cutoutPromiseRef.current) {
-      try {
-        const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 60000))
-        const r = await Promise.race([cutoutPromiseRef.current, timeout])
-        if (r && r.startsWith('data:image/png')) finalCutout = r
-      } catch {
-        /* 忽略 */
-      }
-    }
-    const entry = addFood({
+    addFood({
       name: result.name || '未命名食物',
       emoji: result.emoji,
       imageUrl: originalImage,
-      cutoutImage: finalCutout,
       calories: result.calories,
       carbs: result.carbs,
       protein: result.protein,
@@ -219,7 +162,6 @@ export default function AiRecognizePage() {
       mealType,
       date,
     })
-    savedEntryIdRef.current = entry.id
     setSaving(false)
     navigate('/diary')
   }
@@ -258,23 +200,21 @@ export default function AiRecognizePage() {
       {/* 图片区域 */}
       <div className="relative flex-1 overflow-hidden px-4">
         {originalImage ? (
-          <div className="relative h-full w-full overflow-hidden rounded-3xl">
-            {/* 背景：模糊原图（毛玻璃） */}
-            <img
-              src={originalImage}
-              alt=""
-              className="absolute inset-0 h-full w-full scale-110 object-cover blur-xl opacity-40"
-              draggable={false}
-            />
-            <div className="absolute inset-0 bg-black/30" />
-            {/* 前景：抠图后的食物 */}
-            {status === 'success' && cutoutImage ? (
-              <div className="absolute inset-0 flex items-center justify-center p-6">
-                <img src={cutoutImage} alt="食物" className="max-h-[70%] max-w-[80%] object-contain drop-shadow-2xl" />
-              </div>
-            ) : originalImage ? (
-              <img src={originalImage} alt="食物" className="h-full w-full object-contain" />
-            ) : null}
+          <div className="flex h-full w-full flex-col items-center justify-center gap-4">
+            {/* 原图 + 圆形裁剪 */}
+            <div className="flex h-56 w-56 items-center justify-center overflow-hidden rounded-full border-4 border-white/20 shadow-2xl">
+              <img
+                src={originalImage}
+                alt="食物"
+                className="h-full w-full object-cover"
+                draggable={false}
+              />
+            </div>
+            {status === 'success' && result && (
+              <p className="rounded-full bg-white/15 px-4 py-1.5 text-xs font-semibold text-white backdrop-blur">
+                {result.name} · {result.calories} kcal
+              </p>
+            )}
           </div>
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-5">
@@ -298,7 +238,7 @@ export default function AiRecognizePage() {
           </div>
         )}
 
-        {/* analyzing 遮罩：思考中 + 抠图进度 */}
+        {/* analyzing 遮罩：思考中 */}
         <AnimatePresence>
           {status === 'analyzing' && (
             <motion.div
@@ -321,14 +261,6 @@ export default function AiRecognizePage() {
               >
                 ✨ 思考中...
               </motion.p>
-              {cutoutProgress !== null && cutoutProgress < 100 && (
-                <div className="mt-4 w-48">
-                  <p className="mb-1 text-center text-[10px] text-white/60">模型加载中... {cutoutProgress}%</p>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-white/20">
-                    <div className="h-full rounded-full bg-white transition-all" style={{ width: `${cutoutProgress}%` }} />
-                  </div>
-                </div>
-              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -390,19 +322,6 @@ export default function AiRecognizePage() {
               })}
             </div>
 
-            {/* 抠图进行中提示 */}
-            {cutoutProgress !== null && cutoutProgress < 100 && (
-              <div className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-bg px-3 py-2">
-                <span className="text-[10px] text-ink/50">正在处理食物背景...</span>
-                <div className="h-1 w-24 overflow-hidden rounded-full bg-ink/10">
-                  <div
-                    className="h-full rounded-full bg-primary transition-all"
-                    style={{ width: `${cutoutProgress}%` }}
-                  />
-                </div>
-                <span className="text-[10px] font-semibold text-primary">{cutoutProgress}%</span>
-              </div>
-            )}
 
             {/* 餐类选择 */}
             <div className="mt-4">
