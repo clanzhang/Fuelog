@@ -52,10 +52,14 @@ export default function AiRecognizePage() {
   const [wechat] = useState(isWeChat)
   const { addFood } = useData()
 
-  // 从 App 层传递来的图片（location.state.imageData，已压缩为 base64）
-  const imageData = (location.state as { imageData?: string } | null)?.imageData
+  // 从 App 层传递来的图片（location.state.imageData，可能是完整 dataURL 或纯 base64）
+  const rawImageData = (location.state as { imageData?: string } | null)?.imageData
+  // 统一提取纯 base64（去掉 data:...;base64, 前缀）
+  const imageData = rawImageData
+    ? rawImageData.replace(/^data:image\/[^;]+;base64,/, '')
+    : undefined
 
-  // 核心处理：压缩 → 并行(分析 + 抠图) → success/error
+  // 核心处理：压缩 → 分析 + 抠图（分析完成立即展示，抠图后台继续）
   useEffect(() => {
     if (!imageData) {
       setStatus('error')
@@ -68,31 +72,33 @@ export default function AiRecognizePage() {
     setCutoutProgress(null)
 
     const run = async () => {
-      // 并行：AI 分析 + 抠图（抠图失败降级用原图，不阻塞主流程）
-      const [analysis, cutout] = await Promise.allSettled([
-        analyzeFood(imageData),
-        removeFoodBackground(`data:image/jpeg;base64,${imageData}`, (p) => {
-          if (!cancelled) setCutoutProgress(p)
-        }).catch(() => null),
-      ])
-
-      if (cancelled) return
-
-      if (analysis.status === 'rejected') {
+      // 1. AI 分析（先完成先展示）
+      let analysisResult: FoodAnalysisResult | null = null
+      try {
+        analysisResult = await analyzeFood(imageData)
+      } catch (err) {
+        if (cancelled) return
         setStatus('error')
-        setErrorMsg(
-          analysis.reason instanceof Error ? analysis.reason.message : '识别失败，请重试',
-        )
+        setErrorMsg(err instanceof Error ? err.message : '识别失败，请重试')
         return
       }
+      if (cancelled) return
 
-      setResult(analysis.value)
-      setCutoutImage(
-        cutout.status === 'fulfilled' && cutout.value
-          ? cutout.value
-          : `data:image/jpeg;base64,${imageData}`,
-      )
+      // 分析成功 → 立即展示结果（先用原图，抠图后替换）
+      setResult(analysisResult)
+      setCutoutImage(`data:image/jpeg;base64,${imageData}`)
       setStatus('success')
+
+      // 2. 抠图后台继续，完成后替换（失败/超时则保持原图）
+      removeFoodBackground(`data:image/jpeg;base64,${imageData}`, (p) => {
+        if (!cancelled) setCutoutProgress(p)
+      })
+        .then((cutout) => {
+          if (!cancelled && cutout) setCutoutImage(cutout)
+        })
+        .catch(() => {
+          /* 抠图失败，保持原图 */
+        })
     }
     run()
 
@@ -116,24 +122,26 @@ export default function AiRecognizePage() {
       setOriginalImage(`data:image/jpeg;base64,${dataUrl}`)
       setStatus('analyzing')
       setCutoutProgress(null)
-      const [analysis, cutout] = await Promise.allSettled([
-        analyzeFood(dataUrl),
-        removeFoodBackground(`data:image/jpeg;base64,${dataUrl}`, (p) => setCutoutProgress(p)).catch(() => null),
-      ])
-      if (analysis.status === 'rejected') {
+      // 1. AI 分析（先完成先展示）
+      let analysisResult: FoodAnalysisResult | null = null
+      try {
+        analysisResult = await analyzeFood(dataUrl)
+      } catch (err) {
         setStatus('error')
-        setErrorMsg(
-          analysis.reason instanceof Error ? analysis.reason.message : '识别失败，请重试',
-        )
+        setErrorMsg(err instanceof Error ? err.message : '识别失败，请重试')
         return
       }
-      setResult(analysis.value)
-      setCutoutImage(
-        cutout.status === 'fulfilled' && cutout.value
-          ? cutout.value
-          : `data:image/jpeg;base64,${dataUrl}`,
-      )
+      setResult(analysisResult)
+      setCutoutImage(`data:image/jpeg;base64,${dataUrl}`)
       setStatus('success')
+      // 2. 抠图后台继续，完成后替换
+      removeFoodBackground(`data:image/jpeg;base64,${dataUrl}`, (p) => setCutoutProgress(p))
+        .then((cutout) => {
+          if (cutout) setCutoutImage(cutout)
+        })
+        .catch(() => {
+          /* 抠图失败，保持原图 */
+        })
     } catch {
       setStatus('error')
       setErrorMsg('图片处理失败，请重试')

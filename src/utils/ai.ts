@@ -64,17 +64,18 @@ export async function analyzeFood(imageBase64: string): Promise<FoodAnalysisResu
   }
 
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 15000)
+  const timeout = setTimeout(() => controller.abort(), 20000)
 
   try {
-    const response = await fetch('https://api.deepseek.com/chat/completions', {
+    // Moonshot Kimi 视觉模型（支持图像输入）
+    const response = await fetch('https://api.moonshot.cn/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'deepseek-chat',
+        model: 'moonshot-v1-8k-vision-preview',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           {
@@ -104,11 +105,8 @@ export async function analyzeFood(imageBase64: string): Promise<FoodAnalysisResu
         /* ignore */
       }
       // 常见错误 → 中文提示
-      if (/Authentication Fails|invalid api key|api key.*invalid/i.test(msg)) {
+      if (/Authentication Fails|invalid api key|api key.*invalid|invalid key/i.test(msg)) {
         throw new Error('API Key 无效，请检查 .env 中的 VITE_DEEPSEEK_API_KEY')
-      }
-      if (/unknown variant `image_url`|image_url|vision/i.test(msg)) {
-        throw new Error('当前 DeepSeek 服务不支持图片识别，请配置支持视觉的多模态 API 或改用手动输入')
       }
       throw new Error(msg)
     }
