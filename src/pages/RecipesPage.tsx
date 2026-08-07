@@ -3,7 +3,6 @@ import { motion } from 'framer-motion'
 import Page from '../components/Page'
 import SolarIcon from '../components/SolarIcon'
 import { useData } from '../context/DataContext'
-import ActionSheet from '../components/ActionSheet'
 import { useNavigate } from 'react-router-dom'
 
 // 分类标签（固定预设）
@@ -26,18 +25,10 @@ const EMOJI_BG: Record<string, string> = {
 }
 
 export default function RecipesPage() {
-  const { favorites, addFavorite, removeFavorite } = useData()
+  const { favorites, removeFavorite } = useData()
   const navigate = useNavigate()
-  const [formOpen, setFormOpen] = useState(false)
-  const [name, setName] = useState('')
-  const [author, setAuthor] = useState('')
-  const [calories, setCalories] = useState('')
-  const [category, setCategory] = useState('')
-  const [emoji, setEmoji] = useState('🍽️')
   const [query, setQuery] = useState('')
   const [activeTag, setActiveTag] = useState('全部')
-
-  const emojis = ['🥗', '🍝', '🍤', '🥣', '🍄', '🥞', '🎃', '🍲', '🍳', '🥑', '🍗', '🐟']
 
   // 搜索 + 分类筛选
   const filtered = useMemo(
@@ -50,38 +41,17 @@ export default function RecipesPage() {
     [favorites, activeTag, query],
   )
 
-  const submit = () => {
-    if (!name.trim()) return
-    addFavorite({
-      id: `fav_${Date.now()}`,
-      name: name.trim(),
-      author: author.trim() || '我',
-      emoji,
-      calories: Number(calories) || 0,
-      category: category.trim() || '自定义',
-    })
-    setFormOpen(false)
-    setName('')
-    setAuthor('')
-    setCalories('')
-    setCategory('')
-    setEmoji('🍽️')
-  }
-
   return (
     <Page>
-      {/* 顶部标题 */}
+      {/* 顶部标题（去掉右上角 + 按钮） */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-display text-2xl font-black text-ink">健康食谱</h1>
           <p className="mt-0.5 text-sm font-medium text-ink/45">收藏你的健康食谱</p>
         </div>
-        <button
-          onClick={() => setFormOpen(true)}
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-white shadow-fab active:scale-90"
-        >
-          <SolarIcon name="add" size={22} />
-        </button>
+        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary-soft text-primary">
+          <SolarIcon name="book" size={20} />
+        </div>
       </div>
 
       {/* "今天做什么" 入口卡片 */}
@@ -186,67 +156,15 @@ export default function RecipesPage() {
             <SolarIcon name="book" size={36} className="text-primary" />
           </div>
           <p className="mt-4 font-display text-base font-bold text-ink">还没有收藏食谱</p>
-          <p className="mt-1 text-sm text-ink/45">识别食物后可以收藏到食谱</p>
+          <p className="mt-1 text-sm text-ink/45">AI 识别结果或食材选菜后可收藏</p>
           <button
-            onClick={() => setFormOpen(true)}
+            onClick={() => navigate('/ingredient-pick')}
             className="mt-5 rounded-full bg-primary px-6 py-2.5 text-xs font-semibold text-white shadow-fab"
           >
-            收藏食谱
+            🍳 选食材做菜
           </button>
         </div>
       )}
-
-      {/* 添加收藏表单 */}
-      <ActionSheet open={formOpen} onClose={() => setFormOpen(false)} title="收藏食谱">
-        <div className="space-y-3">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="食谱名称"
-            className="w-full rounded-2xl bg-bg px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/40"
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <input
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              placeholder="作者"
-              className="w-full rounded-2xl bg-bg px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/40"
-            />
-            <input
-              value={calories}
-              onChange={(e) => setCalories(e.target.value)}
-              type="number"
-              placeholder="卡路里 kcal"
-              className="w-full rounded-2xl bg-bg px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/40"
-            />
-          </div>
-          <input
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            placeholder="分类（如：高蛋白 / 素食）"
-            className="w-full rounded-2xl bg-bg px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/40"
-          />
-          <div className="flex flex-wrap gap-2">
-            {emojis.map((e) => (
-              <button
-                key={e}
-                onClick={() => setEmoji(e)}
-                className={`flex h-10 w-10 items-center justify-center rounded-xl text-xl ${
-                  emoji === e ? 'bg-primary-soft ring-2 ring-primary/40' : 'bg-bg'
-                }`}
-              >
-                {e}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={submit}
-            className="w-full rounded-full bg-primary py-3.5 text-sm font-bold text-white shadow-fab"
-          >
-            保存收藏
-          </button>
-        </div>
-      </ActionSheet>
     </Page>
   )
 }
