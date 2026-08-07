@@ -4,6 +4,7 @@ import Page from '../components/Page'
 import SolarIcon from '../components/SolarIcon'
 import { useData } from '../context/DataContext'
 import ActionSheet from '../components/ActionSheet'
+import { useNavigate } from 'react-router-dom'
 
 // 分类标签（固定预设）
 const CATEGORY_TAGS = ['全部', '低卡', '高蛋白', '素食', '快手菜', '减脂餐']
@@ -26,6 +27,7 @@ const EMOJI_BG: Record<string, string> = {
 
 export default function RecipesPage() {
   const { favorites, addFavorite, removeFavorite } = useData()
+  const navigate = useNavigate()
   const [formOpen, setFormOpen] = useState(false)
   const [name, setName] = useState('')
   const [author, setAuthor] = useState('')
@@ -81,6 +83,23 @@ export default function RecipesPage() {
           <SolarIcon name="add" size={22} />
         </button>
       </div>
+
+      {/* "今天做什么" 入口卡片 */}
+      <motion.button
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        onClick={() => navigate('/ingredient-pick')}
+        className="mt-4 flex w-full items-center gap-4 rounded-3xl bg-gradient-to-br from-primary to-primary-dark p-5 text-left text-white shadow-fab active:scale-[0.98]"
+      >
+        <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-3xl">
+          🍳
+        </span>
+        <div className="flex-1">
+          <p className="font-display text-lg font-extrabold">今天做什么？</p>
+          <p className="mt-0.5 text-xs text-white/70">选一下你有的食材，AI 推荐菜谱</p>
+        </div>
+        <SolarIcon name="arrow-right" size={20} className="text-white/70" />
+      </motion.button>
 
       {/* 搜索区（浅灰圆角） */}
       {favorites.length > 0 && (

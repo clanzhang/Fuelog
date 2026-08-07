@@ -11,6 +11,8 @@ import ProfilePage from './pages/ProfilePage'
 import FoodDetailPage from './pages/FoodDetailPage'
 import AiRecognizePage from './pages/AiRecognizePage'
 import ManualAddPage from './pages/ManualAddPage'
+import IngredientPickPage from './pages/IngredientPickPage'
+import RecipeResultPage from './pages/RecipeResultPage'
 import { compressImage } from './utils/image'
 
 export default function App() {
@@ -63,6 +65,8 @@ export default function App() {
             <Route path="/food/:id" element={<FoodDetailPage />} />
             <Route path="/recognize" element={<AiRecognizePage />} />
             <Route path="/manual-add" element={<ManualAddPage />} />
+            <Route path="/ingredient-pick" element={<IngredientPickPage />} />
+            <Route path="/recipe-result" element={<RecipeResultPage />} />
           </Routes>
         </AnimatePresence>
 

@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import SolarIcon from '../components/SolarIcon'
 import { useData, todayStr } from '../context/DataContext'
-import { MEAL_LABEL, type MealType } from '../types'
+import { MEAL_LABEL, type FoodEntry, type MealType } from '../types'
 import { compressImage } from '../utils/image'
 
 export default function ManualAddPage() {
@@ -13,15 +13,17 @@ export default function ManualAddPage() {
   const photoRef = useRef<HTMLInputElement>(null)
   // 从识别页降级带入的照片（location.state.imageUrl）
   const incomingImage = (location.state as { imageUrl?: string } | null)?.imageUrl
-  const [name, setName] = useState('')
-  const [calories, setCalories] = useState('')
-  const [carbs, setCarbs] = useState('0')
-  const [protein, setProtein] = useState('0')
-  const [fat, setFat] = useState('0')
-  const [fiber, setFiber] = useState('0')
-  const [sugar, setSugar] = useState('0')
-  const [sodium, setSodium] = useState('0')
-  const [tips, setTips] = useState('')
+  // AI 菜谱推荐带入的预填数据（location.state.prefill）
+  const prefill = (location.state as { prefill?: Partial<FoodEntry> } | null)?.prefill
+  const [name, setName] = useState(prefill?.name ?? '')
+  const [calories, setCalories] = useState(prefill?.calories ? String(prefill.calories) : '')
+  const [carbs, setCarbs] = useState(prefill?.carbs ? String(prefill.carbs) : '0')
+  const [protein, setProtein] = useState(prefill?.protein ? String(prefill.protein) : '0')
+  const [fat, setFat] = useState(prefill?.fat ? String(prefill.fat) : '0')
+  const [fiber, setFiber] = useState(prefill?.fiber ? String(prefill.fiber) : '0')
+  const [sugar, setSugar] = useState(prefill?.sugar ? String(prefill.sugar) : '0')
+  const [sodium, setSodium] = useState(prefill?.sodium ? String(prefill.sodium) : '0')
+  const [tips, setTips] = useState(prefill?.tips ?? '')
   const [mealType, setMealType] = useState<MealType>('breakfast')
   const [date, setDate] = useState(todayStr())
   const [imageUrl, setImageUrl] = useState<string | undefined>(incomingImage)
