@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useState } from 'react'
+import { motion, useMotionValue, useTransform, animate } from 'framer-motion'
 import Page, { PageHeader } from '../components/Page'
 import SolarIcon from '../components/SolarIcon'
 import ProgressRing from '../components/ProgressRing'
@@ -19,13 +19,34 @@ function formatSubtitle(dateStr: string) {
   return `${month} ${day} · ${weekday}`
 }
 
+// 数字递增动画组件
+function AnimatedNumber({
+  value,
+  className,
+  duration = 1.2,
+}: {
+  value: number
+  className?: string
+  duration?: number
+}) {
+  const count = useMotionValue(0)
+  const rounded = useTransform(count, (v) => Math.round(v))
+
+  useEffect(() => {
+    const controls = animate(count, value, { duration, ease: 'easeOut' })
+    return controls.stop
+  }, [count, value, duration])
+
+  return <motion.span className={className}>{rounded}</motion.span>
+}
+
 const container = {
   hidden: {},
-  show: { transition: { staggerChildren: 0.08 } },
+  show: { transition: { staggerChildren: 0.1 } },
 }
 const item = {
-  hidden: { opacity: 0, y: 24 },
-  show: { opacity: 1, y: 0, transition: { type: 'spring' as const, damping: 20 } },
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.4 } },
 }
 
 const WATER_LABEL: Record<string, string> = { water: '水', tea: '茶', coffee: '咖啡' }
@@ -116,31 +137,46 @@ export default function TodayPage() {
         >
           <div className="flex items-center gap-5">
             <ProgressRing progress={calPercent} color="#FFFFFF" track="rgba(255,255,255,0.18)">
-              <span className="font-display text-3xl font-black leading-none">{consumed}</span>
+              <AnimatedNumber value={consumed} className="font-display text-3xl font-black leading-none" />
               <span className="mt-1 text-[11px] text-white/70">/ {settings.dailyCalorieGoal} kcal</span>
             </ProgressRing>
             <div className="flex-1 space-y-4">
-              <div className="rounded-2xl bg-white/10 p-3">
+              {/* 已摄入（点击跳 Diary） */}
+              <button
+                onClick={() => navigate('/diary')}
+                className="w-full rounded-2xl bg-white/10 p-3 text-left active:scale-[0.98] transition"
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-white/70">已摄入</span>
-                  <span className="font-display text-sm font-bold">{consumed} kcal</span>
+                  <span className="font-display text-sm font-bold">
+                    <AnimatedNumber value={consumed} /> kcal
+                  </span>
                 </div>
                 <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/20">
-                  <div className="h-full rounded-full bg-white" style={{ width: `${Math.min(calPercent * 100, 100)}%` }} />
+                  <div
+                    className="h-full rounded-full bg-white transition-all duration-1000 ease-out"
+                    style={{ width: `${Math.min(calPercent * 100, 100)}%` }}
+                  />
                 </div>
-              </div>
-              <div className="rounded-2xl bg-white/10 p-3">
+              </button>
+              {/* 运动消耗（点击跳 Trainers） */}
+              <button
+                onClick={() => navigate('/trainers')}
+                className="w-full rounded-2xl bg-white/10 p-3 text-left active:scale-[0.98] transition"
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-white/70">运动消耗</span>
-                  <span className="font-display text-sm font-bold">{burned} kcal</span>
+                  <span className="font-display text-sm font-bold">
+                    <AnimatedNumber value={burned} /> kcal
+                  </span>
                 </div>
                 <div className="mt-2 flex items-center gap-1">
                   <SolarIcon name="running" size={14} className="text-orange-200" />
                   <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/20">
-                    <div className="h-full rounded-full bg-gradient-to-r from-amber-300 to-orange-400" style={{ width: `${Math.min((burned / 600) * 100, 100)}%` }} />
+                    <div className="h-full rounded-full bg-gradient-to-r from-amber-300 to-orange-400 transition-all duration-1000 ease-out" style={{ width: `${Math.min((burned / 600) * 100, 100)}%` }} />
                   </div>
                 </div>
-              </div>
+              </button>
             </div>
           </div>
 
@@ -150,18 +186,28 @@ export default function TodayPage() {
               { label: '碳水', val: carbs, goal: settings.carbsGoal },
               { label: '蛋白质', val: protein, goal: settings.proteinGoal },
               { label: '脂肪', val: fat, goal: settings.fatGoal },
-            ].map((n) => (
-              <div key={n.label} className="rounded-2xl bg-white/10 p-3 text-center">
-                <p className="text-[11px] text-white/70">{n.label}</p>
-                <p className="mt-1 font-display text-base font-extrabold">
-                  {n.val}
-                  <span className="text-[10px] font-semibold text-white/60">/{n.goal}g</span>
-                </p>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/20">
-                  <div className="h-full rounded-full bg-white" style={{ width: `${Math.min((n.val / n.goal) * 100, 100)}%` }} />
+            ].map((n) => {
+              const progress = n.goal > 0 ? n.val / n.goal : 0
+              const over = progress >= 1
+              return (
+                <div key={n.label} className="rounded-2xl bg-white/10 p-3 text-center">
+                  <p className="text-[11px] text-white/70">{n.label}</p>
+                  <p className="mt-1 font-display text-base font-extrabold">
+                    <AnimatedNumber value={n.val} />
+                    <span className="text-[10px] font-semibold text-white/60">/{n.goal}g</span>
+                  </p>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/20">
+                    <div
+                      className="h-full rounded-full transition-all duration-1000 ease-out"
+                      style={{
+                        width: `${Math.min(progress * 100, 100)}%`,
+                        backgroundColor: over ? '#FF3B30' : '#FFFFFF',
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </motion.div>
 
