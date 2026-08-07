@@ -1,4 +1,4 @@
-// AI 生成食谱工具（DashScope 通义千问）
+// AI 生成食谱工具（DeepSeek 纯文本模型）
 
 export interface GeneratedRecipe {
   name: string
@@ -40,73 +40,62 @@ export async function generateRecipes(
   tool: string,
   flavor: string,
 ): Promise<GeneratedRecipe[]> {
-  const API_KEY = import.meta.env.VITE_DASHSCOPE_API_KEY as string | undefined
+  const API_KEY = import.meta.env.VITE_DEEPSEEK_RECIPE_API_KEY as string | undefined
   if (!API_KEY) {
     await new Promise((r) => setTimeout(r, 800))
-    throw new Error('未配置 DashScope API Key')
+    throw new Error('未配置 DeepSeek API Key')
   }
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 30000)
 
   try {
-    const response = await fetch(
-      'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'qwen-vl-max',
-          input: {
-            messages: [
-              { role: 'system', content: SYSTEM_PROMPT },
-              {
-                role: 'user',
-                content: [
-                  {
-                    text: `我有的食材：${ingredients.join('、')}
+    // DeepSeek 官方 API（纯文本模型生成菜谱）
+    const response = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          {
+            role: 'user',
+            content: `我有的食材：${ingredients.join('、')}
 厨具：${tool}
 口味偏好：${flavor || '不限'}
 请推荐 6 道可以做的菜。`,
-                  },
-                ],
-              },
-            ],
           },
-        }),
-        signal: controller.signal,
-      },
-    )
+        ],
+        max_tokens: 1500,
+        temperature: 0.7,
+      }),
+      signal: controller.signal,
+    })
 
     if (!response.ok) {
       const errText = await response.text().catch(() => '')
       let msg = `API 错误 ${response.status}`
       try {
         const err = JSON.parse(errText)
-        if (err?.message) msg = err.message
+        if (err?.error?.message) msg = err.error.message
       } catch {
         /* ignore */
       }
       if (/authentication|invalid.*api.*key|401|403/i.test(msg)) {
-        throw new Error('API Key 无效，请检查 .env 中的 VITE_DASHSCOPE_API_KEY')
+        throw new Error('API Key 无效，请检查 .env 中的 VITE_DEEPSEEK_RECIPE_API_KEY')
       }
       throw new Error(msg)
     }
 
     const data = await response.json()
-    const content = data?.output?.choices?.[0]?.message?.content
+    const content = data?.choices?.[0]?.message?.content
     if (!content) throw new Error('Empty response')
 
-    // content 可能是字符串或数组，统一取文本
-    let text = ''
-    if (typeof content === 'string') {
-      text = content
-    } else if (Array.isArray(content)) {
-      text = content.map((c) => (typeof c === 'string' ? c : c?.text ?? '')).join('\n')
-    }
+    // DeepSeek 返回字符串内容，兼容 markdown 代码块
+    const text = typeof content === 'string' ? content : JSON.stringify(content)
     if (!text.trim()) throw new Error('Empty response')
 
     // 兼容 markdown 代码块
