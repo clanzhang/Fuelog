@@ -4,6 +4,7 @@ import Page from '../components/Page'
 import SolarIcon from '../components/SolarIcon'
 import { useData } from '../context/DataContext'
 import type { UserSettings } from '../types'
+import { supabase, isSupabaseConfigured } from '../utils/supabase'
 
 const container = {
   hidden: {},
@@ -15,7 +16,7 @@ const item = {
 }
 
 export default function ProfilePage() {
-  const { foods, plans, settings, updateSettings, clearAll } = useData()
+  const { foods, plans, settings, updateSettings, clearAll, isLoggedIn, userEmail, syncing } = useData()
   const [confirmClear, setConfirmClear] = useState(false)
 
   // 实时统计
@@ -71,6 +72,34 @@ export default function ProfilePage() {
             健康每一天
           </p>
         </motion.div>
+
+        {/* 云同步状态卡片 */}
+        {isSupabaseConfigured && (
+          <motion.div variants={item} className="mt-5">
+            <div className="flex items-center gap-3 rounded-2xl bg-surface p-4 shadow-card">
+              <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${isLoggedIn ? 'bg-green-50 text-green-500' : 'bg-ink/5 text-ink/40'}`}>
+                <SolarIcon name="cloud" size={20} />
+              </span>
+              <div className="flex-1">
+                <p className="text-sm font-bold text-ink">
+                  {isLoggedIn ? (userEmail || '已登录') : '未登录'}
+                </p>
+                <p className="mt-0.5 text-[11px] text-ink/45">
+                  {syncing ? '正在同步...' : isLoggedIn ? '云端已连接，多设备同步中' : '登录后可同步数据到云端'}
+                </p>
+              </div>
+              {isLoggedIn && (
+                <button
+                  onClick={() => supabase?.auth.signOut()}
+                  className="flex items-center gap-1 rounded-full bg-ink/5 px-3 py-1.5 text-[11px] font-semibold text-ink/60 active:scale-95"
+                >
+                  <SolarIcon name="logout" size={13} />
+                  退出
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
 
         {/* 统计 */}
         <motion.div variants={item} className="mt-6 grid grid-cols-3 gap-3">

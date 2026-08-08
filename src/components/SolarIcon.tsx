@@ -55,6 +55,9 @@ import thermometer from '@iconify/icons-solar/thermometer-bold'
 import flame from '@iconify/icons-solar/flame-bold'
 import diagramUp from '@iconify/icons-solar/diagram-up-bold'
 import repeat from '@iconify/icons-solar/repeat-bold'
+import cloud from '@iconify/icons-solar/cloud-bold'
+import logout from '@iconify/icons-solar/logout-2-bold'
+import login from '@iconify/icons-solar/login-2-bold'
 
 const icons = {
   'home': homeSmile,
@@ -114,6 +117,9 @@ const icons = {
   'trend-up': diagramUp,
   'ball': basketball,
   'repeat': repeat,
+  'cloud': cloud,
+  'logout': logout,
+  'login': login,
 }
 
 export type SolarIconName = keyof typeof icons

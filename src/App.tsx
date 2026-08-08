@@ -13,12 +13,16 @@ import AiRecognizePage from './pages/AiRecognizePage'
 import ManualAddPage from './pages/ManualAddPage'
 import IngredientPickPage from './pages/IngredientPickPage'
 import RecipeResultPage from './pages/RecipeResultPage'
+import LoginPage from './pages/LoginPage'
 import { compressImage } from './utils/image'
+import { isSupabaseConfigured } from './utils/supabase'
+import { useData } from './context/DataContext'
 
 export default function App() {
   const [sheetOpen, setSheetOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
+  const { isLoggedIn, syncing } = useData()
   // 拍照 / 相册两个独立 input：拍照带 capture，相册不带
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const galleryInputRef = useRef<HTMLInputElement>(null)
@@ -26,6 +30,9 @@ export default function App() {
   const showTabBar = ['/', '/today', '/diary', '/recipes', '/trainers', '/profile'].includes(
     location.pathname,
   )
+
+  // 路由守卫：已配置 Supabase 但未登录 → 显示登录页
+  const needsLogin = isSupabaseConfigured && !isLoggedIn && !syncing
 
   // 读取文件 → 压缩 → 带着图片进入识别流程
   const handlePick = async (e: React.ChangeEvent<HTMLInputElement>, source: string) => {
@@ -48,6 +55,16 @@ export default function App() {
     } else if (key === 'manual') {
       navigate('/manual-add')
     }
+  }
+
+  if (needsLogin) {
+    return (
+      <div className="flex h-full items-center justify-center bg-[#1E1E2E]">
+        <div className="relative h-full max-h-[900px] w-full max-w-[430px] overflow-hidden bg-bg shadow-[0_0_80px_rgba(0,0,0,0.6)] sm:my-6 sm:h-[calc(100%-3rem)] sm:rounded-[3rem] sm:border-[10px] sm:border-ink/90">
+          <LoginPage />
+        </div>
+      </div>
+    )
   }
 
   return (
