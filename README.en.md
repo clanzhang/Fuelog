@@ -8,19 +8,17 @@
 
 ## ✨ Features
 
-| Module | Description |
-|--------|-------------|
-| 📸 **AI Photo Recognition** | Take/select a photo → vision model recognizes food name, calories, 6 nutrients + AI tips |
-| 🍳 **Ingredient-to-Recipe** | Pick your ingredients + cookware + flavor → AI recommends recipes (calories / time / difficulty / steps) |
-| 📓 **Food Diary** | Log meals by date (breakfast/lunch/dinner/snack) with sticker-style food cards and daily intake stats |
-| 📅 **Calendar View** | Weekly date switcher with dot markers on logged days |
-| 🍽️ **Recipes** | Magazine-style card wall with search, category filters, and favorites |
-| 💪 **Training Plans** | Weekly burn bar chart (Recharts) + training task management & completion |
-| 💧 **Habit Tracking** | Water intake (+250/500/750ml) & exercise minutes with quick-action sheets |
-| 🎯 **Goal Settings** | Configurable calorie / macro / water / exercise goals |
-| ☁️ **Cloud Sync** | Supabase auth + multi-device sync with localStorage offline fallback |
-| 💾 **Local Persistence** | All data persisted locally (`fuelog_` prefix), survives refresh |
-| 🌐 **PWA Deployment** | HashRouter + GitHub Pages, works on WeChat browser |
+- 📸 **AI Photo Recognition** — take/select a photo, vision model recognizes food name, calories, 6 nutrients + AI tips
+- 🍳 **Ingredient-to-Recipe** — pick your ingredients + cookware + flavor, AI recommends recipes (calories / time / difficulty / steps)
+- 📓 **Food Diary** — log meals by date (breakfast/lunch/dinner/snack) with sticker-style food cards and daily intake stats
+- 📅 **Calendar View** — weekly date switcher with dot markers on logged days
+- 🍽️ **Recipes** — magazine-style card wall with search, category filters, and favorites
+- 💪 **Training Plans** — weekly burn bar chart + training task management & completion
+- 💧 **Habit Tracking** — water intake (+250/500/750ml) & exercise minutes with quick-action sheets
+- 🎯 **Goal Settings** — configurable calorie / macro / water / exercise goals
+- ☁️ **Cloud Sync** — Supabase auth + multi-device sync with localStorage offline fallback
+- 💾 **Local Persistence** — all data persisted locally (`fuelog_` prefix), survives refresh
+- 🌐 **PWA Deployment** — HashRouter + GitHub Pages, works on WeChat browser
 
 ---
 
