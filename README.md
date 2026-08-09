@@ -114,44 +114,7 @@ Upgrade localStorage to Supabase for **user login + multi-device sync**.
 
 ---
 
-## 📁 项目结构 / Project Structure
-
-```
-Fuelog/
-├── index.html            # 入口 HTML（含主题 CSS 变量）
-├── vite.config.ts        # Vite 配置（base '/Fuelog/'）
-├── tailwind.config.js    # Tailwind 主题（primary #3942DE 等）
-├── supabase/
-│   └── schema.sql        # Supabase 建表脚本（含 RLS 策略）
-├── src/
-│   ├── main.tsx          # 入口（HashRouter + DataProvider）
-│   ├── App.tsx           # 路由 + 全局 ActionSheet + 登录守卫
-│   ├── types.ts          # 类型定义 + 常量
-│   ├── components/       # SolarIcon / BottomTabBar / Page / ProgressRing ...
-│   ├── context/          # DataContext（数据源 + 云同步）
-│   ├── pages/            # Today / Diary / Recipes / Trainers / Profile / ...
-│   └── utils/            # ai / recipes / supabase / cloud / storage / image ...
-```
-
----
-
-## 🧭 页面路由 / Routes
-
-| 路由 / Route | 页面 / Page | 说明 / Description |
-|------|------|------|
-| `/today` | 今日概览 Today | 摄入环、营养素、饮水运动、训练计划 |
-| `/diary` | 饮食日记 Diary | 周视图 + 贴纸网格 + 摄入统计 |
-| `/recipes` | 健康食谱 Recipes | 食材选菜入口 + 收藏卡片墙 |
-| `/trainers` | 训练计划 Trainers | 周柱状图 + 训练列表 |
-| `/profile` | 个人中心 Profile | 统计 + 目标设置 + 云同步 + 退出 |
-| `/food/:id` | 食物详情 Food Detail | AI Tips + 营养素 |
-| `/recognize` | AI 识别 Recognize | 拍照/相册 → 分析 → 结果 |
-| `/ingredient-pick` | 选食材 Ingredient Pick | 食材/厨具/口味选择 |
-| `/recipe-result` | 菜谱结果 Recipe Result | AI 生成菜谱卡片 |
-
----
-
-## 🚢 部署到 GitHub Pages / Deploy to GitHub Pages
+##  部署到 GitHub Pages / Deploy to GitHub Pages
 
 项目已配置 `gh-pages` 部署：
 
