@@ -2,9 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import RecognizeHeader from '../components/RecognizeHeader'
 import RecognizeImageArea from '../components/RecognizeImageArea'
-import RecognizeResult from '../components/RecognizeResult'
-import RecognizeError from '../components/RecognizeError'
-import RecognizeLoadingFooter from '../components/RecognizeLoadingFooter'
+import RecognizeControls from '../components/RecognizeControls'
 import { useData, todayStr } from '../context/DataContext'
 import { type MealType } from '../types'
 import { compressImage } from '../utils/image'
@@ -193,33 +191,24 @@ export default function AiRecognizePage() {
       />
 
       {/* 底部控制区 */}
-      <div className="no-scrollbar relative z-10 max-h-[52%] overflow-y-auto rounded-t-[2rem] bg-surface px-6 pb-8 pt-4">
-        {status === 'success' && result ? (
-          <RecognizeResult
-            result={result}
-            editedKeys={editedKeys}
-            mealType={mealType}
-            date={date}
-            saving={saving}
-            onFieldChange={setField}
-            onEditCalories={editCalories}
-            onEditNutrition={editNutrition}
-            onMealTypeChange={setMealType}
-            onDateChange={setDate}
-            onCancel={() => navigate('/diary')}
-            onSave={saveEntry}
-            onManual={() => navigate('/manual-add', { state: { imageUrl: originalImage } })}
-          />
-        ) : status === 'error' ? (
-          <RecognizeError
-            message={errorMsg}
-            onRetry={() => cameraRef.current?.click()}
-            onManual={() => navigate('/manual-add', { state: { imageUrl: originalImage } })}
-          />
-        ) : status === 'analyzing' || status === 'compressing' ? (
-          <RecognizeLoadingFooter />
-        ) : null}
-      </div>
+      <RecognizeControls
+        status={status}
+        result={result}
+        errorMsg={errorMsg}
+        editedKeys={editedKeys}
+        mealType={mealType}
+        date={date}
+        saving={saving}
+        onFieldChange={setField}
+        onEditCalories={editCalories}
+        onEditNutrition={editNutrition}
+        onMealTypeChange={setMealType}
+        onDateChange={setDate}
+        onCancel={() => navigate('/diary')}
+        onSave={saveEntry}
+        onManual={() => navigate('/manual-add', { state: { imageUrl: originalImage } })}
+        onRetry={() => cameraRef.current?.click()}
+      />
     </div>
   )
 }
