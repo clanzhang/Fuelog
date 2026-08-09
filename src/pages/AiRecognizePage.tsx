@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { AnimatePresence, motion } from 'framer-motion'
-import SolarIcon from '../components/SolarIcon'
+import RecognizeHeader from '../components/RecognizeHeader'
+import RecognizeImageArea from '../components/RecognizeImageArea'
+import RecognizeResult from '../components/RecognizeResult'
+import RecognizeError from '../components/RecognizeError'
+import RecognizeLoadingFooter from '../components/RecognizeLoadingFooter'
 import { useData, todayStr } from '../context/DataContext'
-import { MEAL_LABEL, type MealType } from '../types'
+import { type MealType } from '../types'
 import { compressImage } from '../utils/image'
 import { analyzeFood, type FoodAnalysisResult } from '../utils/ai'
 
@@ -23,15 +26,6 @@ function guessMealType(): MealType {
   if (h >= 18 && h < 23) return 'dinner'
   return 'breakfast'
 }
-
-const nutritionCells: { key: keyof Pick<FoodAnalysisResult, 'carbs' | 'protein' | 'fat' | 'fiber' | 'sugar' | 'sodium'>; label: string; unit: string }[] = [
-  { key: 'carbs', label: '碳水', unit: 'g' },
-  { key: 'protein', label: '蛋白质', unit: 'g' },
-  { key: 'fat', label: '脂肪', unit: 'g' },
-  { key: 'fiber', label: '纤维', unit: 'g' },
-  { key: 'sugar', label: '糖', unit: 'g' },
-  { key: 'sodium', label: '盐', unit: 'mg' },
-]
 
 export default function AiRecognizePage() {
   const navigate = useNavigate()
@@ -186,239 +180,44 @@ export default function AiRecognizePage() {
       />
 
       {/* 顶部栏 */}
-      <div className="flex items-center justify-between px-5 py-4">
-        <button
-          onClick={() => navigate('/diary')}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white"
-        >
-          <SolarIcon name="arrow-left" size={20} />
-        </button>
-        <span className="font-display text-sm font-bold text-white">AI 识别</span>
-        <div className="h-10 w-10" />
-      </div>
+      <RecognizeHeader onBack={() => navigate('/diary')} />
 
       {/* 图片区域 */}
-      <div className="relative flex-1 overflow-hidden px-4">
-        {originalImage ? (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-4">
-            {/* 原图 + 圆形裁剪 */}
-            <div className="flex h-56 w-56 items-center justify-center overflow-hidden rounded-full border-4 border-white/20 shadow-2xl">
-              <img
-                src={originalImage}
-                alt="食物"
-                className="h-full w-full object-cover"
-                draggable={false}
-              />
-            </div>
-            {status === 'success' && result && (
-              <p className="rounded-full bg-white/15 px-4 py-1.5 text-xs font-semibold text-white backdrop-blur">
-                {result.name} · {result.calories} kcal
-              </p>
-            )}
-          </div>
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-5">
-            <p className="px-8 text-center text-sm text-white/60">请选择食物照片开始识别</p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => cameraRef.current?.click()}
-                className="flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white shadow-fab"
-              >
-                <SolarIcon name="camera" size={20} />
-                {wechat ? '拍照' : '拍摄'}
-              </button>
-              <button
-                onClick={() => galleryRef.current?.click()}
-                className="flex items-center gap-2 rounded-full bg-white/15 px-6 py-3 text-sm font-semibold text-white"
-              >
-                <SolarIcon name="gallery" size={20} />
-                相册
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* analyzing 遮罩：思考中 */}
-        <AnimatePresence>
-          {status === 'analyzing' && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 flex flex-col items-center justify-center rounded-3xl bg-[#1E1E2E]/70 backdrop-blur-sm"
-            >
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-                className="text-5xl"
-              >
-                ✨
-              </motion.div>
-              <motion.p
-                animate={{ opacity: [0.4, 1, 0.4] }}
-                transition={{ duration: 1.2, repeat: Infinity }}
-                className="mt-4 font-display text-lg font-bold text-white"
-              >
-                ✨ 思考中...
-              </motion.p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+      <RecognizeImageArea
+        originalImage={originalImage}
+        status={status}
+        result={result}
+        wechat={wechat}
+        onCamera={() => cameraRef.current?.click()}
+        onGallery={() => galleryRef.current?.click()}
+      />
 
       {/* 底部控制区 */}
       <div className="no-scrollbar relative z-10 max-h-[52%] overflow-y-auto rounded-t-[2rem] bg-surface px-6 pb-8 pt-4">
         {status === 'success' && result ? (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-            {/* 名称 */}
-            <input
-              value={result.name}
-              onChange={(e) => setField({ name: e.target.value })}
-              placeholder="食物名称"
-              className="w-full bg-transparent text-center font-display text-2xl font-black text-ink outline-none"
-            />
-            {/* 卡路里 */}
-            <button
-              onClick={editCalories}
-              className="mx-auto mt-1 flex items-center gap-2 rounded-full px-4 py-1 transition active:scale-95"
-            >
-              <span className={`font-display text-xl font-extrabold ${editedKeys.includes('calories') ? 'text-primary' : 'text-ink'}`}>
-                {result.calories} kcal
-              </span>
-              <SolarIcon name="edit" size={14} className="text-ink/40" />
-            </button>
-
-            {/* 黄色横幅 */}
-            <div className="mt-3 flex items-center justify-center gap-1 rounded-full bg-amber-400/20 py-2">
-              <span className="text-sm">🥗</span>
-              <span className="text-xs font-bold text-amber-700">拍照识别卡路里 · 记录饮食</span>
-            </div>
-
-            {/* 低置信度提示 */}
-            {result.confidence === 'low' && (
-              <div className="mt-3 flex items-center justify-center gap-2 rounded-2xl bg-amber-50 px-4 py-2.5 text-xs font-medium text-amber-700">
-                <SolarIcon name="bolt" size={14} className="shrink-0 text-amber-500" />
-                识别可能不准确，建议手动调整
-              </div>
-            )}
-
-            {/* 六宫格营养素 */}
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              {nutritionCells.map((cell) => {
-                const edited = editedKeys.includes(cell.key)
-                return (
-                  <button
-                    key={cell.key}
-                    onClick={() => editNutrition(cell.key, cell.label)}
-                    className={`flex flex-col items-center rounded-2xl py-3 transition active:scale-95 ${edited ? 'bg-primary-soft ring-2 ring-primary/30' : 'bg-bg'}`}
-                  >
-                    <span className="text-xs font-medium text-ink/45">{cell.label}</span>
-                    <span className={`mt-0.5 font-display text-lg font-extrabold ${edited ? 'text-primary' : 'text-ink'}`}>
-                      {result[cell.key]}
-                    </span>
-                    <span className="text-[10px] text-ink/40">{cell.unit}</span>
-                  </button>
-                )
-              })}
-            </div>
-
-
-            {/* 餐类选择 */}
-            <div className="mt-4">
-              <p className="mb-2 text-xs font-semibold text-ink/50">餐类</p>
-              <div className="grid grid-cols-4 gap-2">
-                {(Object.keys(MEAL_LABEL) as MealType[]).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setMealType(m)}
-                    className={`rounded-full py-2 text-xs font-semibold transition ${
-                      mealType === m ? 'bg-primary text-white' : 'bg-bg text-ink/50'
-                    }`}
-                  >
-                    {MEAL_LABEL[m]}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 日期选择 */}
-            <div className="mt-3 flex items-center justify-between rounded-2xl bg-bg px-4 py-3">
-              <span className="text-xs font-semibold text-ink/50">日期</span>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="bg-transparent text-sm font-semibold text-ink outline-none"
-              />
-            </div>
-
-            {/* 底部三按钮 */}
-            <div className="mt-4 flex items-center justify-center gap-4">
-              <button
-                onClick={() => navigate('/diary')}
-                disabled={saving}
-                className="flex h-14 w-14 items-center justify-center rounded-full bg-ink/5 text-ink/50"
-              >
-                <SolarIcon name="close" size={22} />
-              </button>
-              <button
-                onClick={saveEntry}
-                disabled={saving}
-                className="flex h-14 items-center justify-center rounded-full bg-ink px-10 text-white"
-              >
-                {saving ? (
-                  <span className="flex items-center gap-1 text-xs font-semibold">
-                    <motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}>
-                      ✨
-                    </motion.span>
-                    保存中
-                  </span>
-                ) : (
-                  <SolarIcon name="check" size={22} />
-                )}
-              </button>
-              <button
-                onClick={() => navigate('/manual-add')}
-                disabled={saving}
-                className="flex h-14 w-14 items-center justify-center rounded-full bg-ink/5 text-ink/50"
-              >
-                <SolarIcon name="edit" size={20} />
-              </button>
-            </div>
-          </motion.div>
+          <RecognizeResult
+            result={result}
+            editedKeys={editedKeys}
+            mealType={mealType}
+            date={date}
+            saving={saving}
+            onFieldChange={setField}
+            onEditCalories={editCalories}
+            onEditNutrition={editNutrition}
+            onMealTypeChange={setMealType}
+            onDateChange={setDate}
+            onCancel={() => navigate('/diary')}
+            onSave={saveEntry}
+            onManual={() => navigate('/manual-add', { state: { imageUrl: originalImage } })}
+          />
         ) : status === 'error' ? (
-          /* 识别失败态 */
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center py-6">
-            <span className="text-4xl">😕</span>
-            <p className="mt-3 font-display text-base font-bold text-ink">{errorMsg || '识别失败，请重试'}</p>
-            <div className="mt-5 flex gap-3">
-              <button
-                onClick={() => cameraRef.current?.click()}
-                className="rounded-full bg-ink/5 px-6 py-3 text-sm font-semibold text-ink"
-              >
-                重试
-              </button>
-              <button
-                onClick={() => navigate('/manual-add', { state: { imageUrl: originalImage } })}
-                className="rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white shadow-fab"
-              >
-                手动输入
-              </button>
-            </div>
-          </motion.div>
+          <RecognizeError
+            message={errorMsg}
+            onRetry={() => cameraRef.current?.click()}
+            onManual={() => navigate('/manual-add', { state: { imageUrl: originalImage } })}
+          />
         ) : status === 'analyzing' || status === 'compressing' ? (
-          /* 处理中底部（禁用占位） */
-          <div className="flex items-center justify-center gap-4 py-2 opacity-40">
-            <button className="flex h-14 w-14 items-center justify-center rounded-full bg-ink/5 text-ink/50">
-              <SolarIcon name="close" size={22} />
-            </button>
-            <button className="flex h-14 items-center justify-center rounded-full bg-ink/10 px-10 text-ink/40">
-              <SolarIcon name="check" size={22} />
-            </button>
-            <button className="flex h-14 w-14 items-center justify-center rounded-full bg-ink/5 text-ink/30">
-              <SolarIcon name="edit" size={20} />
-            </button>
-          </div>
+          <RecognizeLoadingFooter />
         ) : null}
       </div>
     </div>
