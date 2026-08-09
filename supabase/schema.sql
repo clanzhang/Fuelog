@@ -77,21 +77,63 @@ CREATE TABLE IF NOT EXISTS favorite_recipes (
   saved_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 开启 RLS（行级安全）
-ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE food_entries ENABLE ROW LEVEL SECURITY;
-ALTER TABLE training_plans ENABLE ROW LEVEL SECURITY;
-ALTER TABLE habit_logs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE favorite_recipes ENABLE ROW LEVEL SECURITY;
+-- ============================================================
+-- 提示：请在 Supabase SQL Editor 中「全选整个脚本」一次性运行，
+-- 不要只选中执行其中一段（例如仅 ALTER 部分）。
+-- 下方 RLS / 策略代码已做存在性检查，重复执行也安全。
+-- ============================================================
 
--- 每个用户只能读写自己的数据
-DROP POLICY IF EXISTS "users can CRUD own settings" ON user_settings;
-CREATE POLICY "users can CRUD own settings" ON user_settings FOR ALL USING (auth.uid() = user_id);
-DROP POLICY IF EXISTS "users can CRUD own food" ON food_entries;
-CREATE POLICY "users can CRUD own food" ON food_entries FOR ALL USING (auth.uid() = user_id);
-DROP POLICY IF EXISTS "users can CRUD own plans" ON training_plans;
-CREATE POLICY "users can CRUD own plans" ON training_plans FOR ALL USING (auth.uid() = user_id);
-DROP POLICY IF EXISTS "users can CRUD own habits" ON habit_logs;
-CREATE POLICY "users can CRUD own habits" ON habit_logs FOR ALL USING (auth.uid() = user_id);
-DROP POLICY IF EXISTS "users can CRUD own recipes" ON favorite_recipes;
-CREATE POLICY "users can CRUD own recipes" ON favorite_recipes FOR ALL USING (auth.uid() = user_id);
+-- 开启 RLS（行级安全）
+DO $$
+DECLARE
+  tbl text;
+BEGIN
+  FOREACH tbl IN ARRAY ARRAY[
+    'user_settings','food_entries','training_plans','habit_logs','favorite_recipes'
+  ] LOOP
+    IF to_regclass('public.' || tbl) IS NOT NULL THEN
+      EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', tbl);
+    END IF;
+  END LOOP;
+END $$;
+
+-- 每个用户只能读写自己的数据（策略，表存在才创建）
+DO $$
+BEGIN
+  IF to_regclass('public.user_settings') IS NOT NULL THEN
+    EXECUTE 'DROP POLICY IF EXISTS "users can CRUD own settings" ON user_settings';
+    EXECUTE 'CREATE POLICY "users can CRUD own settings" ON user_settings FOR ALL USING (auth.uid() = user_id)';
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.food_entries') IS NOT NULL THEN
+    EXECUTE 'DROP POLICY IF EXISTS "users can CRUD own food" ON food_entries';
+    EXECUTE 'CREATE POLICY "users can CRUD own food" ON food_entries FOR ALL USING (auth.uid() = user_id)';
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.training_plans') IS NOT NULL THEN
+    EXECUTE 'DROP POLICY IF EXISTS "users can CRUD own plans" ON training_plans';
+    EXECUTE 'CREATE POLICY "users can CRUD own plans" ON training_plans FOR ALL USING (auth.uid() = user_id)';
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.habit_logs') IS NOT NULL THEN
+    EXECUTE 'DROP POLICY IF EXISTS "users can CRUD own habits" ON habit_logs';
+    EXECUTE 'CREATE POLICY "users can CRUD own habits" ON habit_logs FOR ALL USING (auth.uid() = user_id)';
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.favorite_recipes') IS NOT NULL THEN
+    EXECUTE 'DROP POLICY IF EXISTS "users can CRUD own recipes" ON favorite_recipes';
+    EXECUTE 'CREATE POLICY "users can CRUD own recipes" ON favorite_recipes FOR ALL USING (auth.uid() = user_id)';
+  END IF;
+END $$;
