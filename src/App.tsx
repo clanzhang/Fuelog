@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import BottomTabBar from './components/BottomTabBar'
-import QuickInputPanel from './components/QuickInputPanel'
+import ActionSheet from './components/ActionSheet'
 import TodayPage from './pages/TodayPage'
 import DiaryPage from './pages/DiaryPage'
 import RecipesPage from './pages/RecipesPage'
@@ -17,13 +17,12 @@ import LoginPage from './pages/LoginPage'
 import { compressImage } from './utils/image'
 import { isSupabaseConfigured } from './utils/supabase'
 import { useData } from './context/DataContext'
-import type { QuickLogResult } from './utils/quicklog'
 
 export default function App() {
-  const [inputOpen, setInputOpen] = useState(false)
+  const [sheetOpen, setSheetOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
-  const { isLoggedIn, syncing, addFood } = useData()
+  const { isLoggedIn, syncing } = useData()
   // 拍照 / 相册两个独立 input：拍照带 capture，相册不带
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const galleryInputRef = useRef<HTMLInputElement>(null)
@@ -35,28 +34,6 @@ export default function App() {
   // 路由守卫：已配置 Supabase 但未登录 → 显示登录页
   const needsLogin = isSupabaseConfigured && !isLoggedIn && !syncing
 
-  // 一句话快速记录确认 → 写入食物记录
-  const handleQuickLogConfirm = (result: QuickLogResult) => {
-    const today = new Date()
-    const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-    result.items.forEach((item) => {
-      addFood({
-        name: item.name,
-        emoji: item.emoji,
-        calories: item.calories,
-        carbs: item.carbs,
-        protein: item.protein,
-        fat: item.fat,
-        fiber: 0,
-        sugar: 0,
-        sodium: 0,
-        tips: item.isEstimated ? 'AI 估算营养' : '',
-        mealType: result.mealType,
-        date,
-      })
-    })
-  }
-
   // 读取文件 → 压缩 → 带着图片进入识别流程
   const handlePick = async (e: React.ChangeEvent<HTMLInputElement>, source: string) => {
     const file = e.target.files?.[0]
@@ -67,6 +44,16 @@ export default function App() {
       navigate('/recognize', { state: { imageData: base64, source } })
     } catch {
       console.warn('[App] 图片处理失败', e)
+    }
+  }
+
+  const handleSelect = (key: string) => {
+    if (key === 'camera') {
+      cameraInputRef.current?.click()
+    } else if (key === 'gallery') {
+      galleryInputRef.current?.click()
+    } else if (key === 'manual') {
+      navigate('/manual-add')
     }
   }
 
@@ -120,19 +107,22 @@ export default function App() {
 
         {showTabBar && (
           <BottomTabBar
-            inputOpen={inputOpen}
-            onFab={() => setInputOpen(!inputOpen)}
+            onFab={() => setSheetOpen(true)}
           />
         )}
 
-        {/* 全局快速记录输入面板（底部 TabBar 的 + 按钮打开） */}
-        {showTabBar && (
-          <QuickInputPanel
-            open={inputOpen}
-            onClose={() => setInputOpen(false)}
-            onConfirm={handleQuickLogConfirm}
-          />
-        )}
+        <ActionSheet
+          open={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          title="添加饮食记录"
+          options={[
+            { key: 'camera', emoji: '📷', label: '拍照识别' },
+            { key: 'gallery', emoji: '🖼️', label: '相册选择' },
+            { key: 'search', emoji: '🔍', label: '搜索食物' },
+            { key: 'manual', emoji: '✏️', label: '手动输入' },
+          ]}
+          onSelect={handleSelect}
+        />
       </div>
     </div>
   )
