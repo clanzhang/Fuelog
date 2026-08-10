@@ -54,7 +54,7 @@ export default function RecipesPage() {
         </div>
       </div>
 
-      {/* "今天做什么" 入口卡片 */}
+      {/* "今天做什么" 入口横幅 */}
       <motion.button
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
