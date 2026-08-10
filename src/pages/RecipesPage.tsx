@@ -8,20 +8,26 @@ import { useNavigate } from 'react-router-dom'
 // 分类标签（固定预设）
 const CATEGORY_TAGS = ['全部', '低卡', '高蛋白', '素食', '快手菜', '减脂餐']
 
-// emoji 背景渐变（杂志大图风格）
-const EMOJI_BG: Record<string, string> = {
-  '🥗': 'from-green-100 to-emerald-50',
-  '🍝': 'from-rose-100 to-orange-50',
-  '🍤': 'from-orange-100 to-amber-50',
-  '🥣': 'from-amber-100 to-yellow-50',
-  '🍄': 'from-stone-100 to-amber-50',
-  '🥞': 'from-yellow-100 to-amber-50',
-  '🎃': 'from-orange-100 to-yellow-50',
-  '🍲': 'from-emerald-100 to-teal-50',
-  '🍳': 'from-amber-50 to-orange-100',
-  '🥑': 'from-lime-100 to-green-50',
-  '🍗': 'from-orange-100 to-red-50',
-  '🐟': 'from-sky-100 to-blue-50',
+// emoji 背景渐变（杂志大图风格）—— 数组形式，按 emoji 匹配
+const EMOJI_BG: { emoji: string; bg: string }[] = [
+  { emoji: '🥗', bg: 'from-green-100 to-emerald-50' },
+  { emoji: '🍝', bg: 'from-rose-100 to-orange-50' },
+  { emoji: '🍤', bg: 'from-orange-100 to-amber-50' },
+  { emoji: '🥣', bg: 'from-amber-100 to-yellow-50' },
+  { emoji: '🍄', bg: 'from-stone-100 to-amber-50' },
+  { emoji: '🥞', bg: 'from-yellow-100 to-amber-50' },
+  { emoji: '🎃', bg: 'from-orange-100 to-yellow-50' },
+  { emoji: '🍲', bg: 'from-emerald-100 to-teal-50' },
+  { emoji: '🍳', bg: 'from-amber-50 to-orange-100' },
+  { emoji: '🥑', bg: 'from-lime-100 to-green-50' },
+  { emoji: '🍗', bg: 'from-orange-100 to-red-50' },
+  { emoji: '🐟', bg: 'from-sky-100 to-blue-50' },
+]
+
+// 根据 emoji 取渐变（找不到用默认）
+const DEFAULT_BG = 'from-bg to-primary-soft'
+function emojiBg(emoji?: string): string {
+  return EMOJI_BG.find((e) => e.emoji === emoji)?.bg ?? DEFAULT_BG
 }
 
 export default function RecipesPage() {
@@ -112,7 +118,7 @@ export default function RecipesPage() {
       {filtered.length > 0 ? (
         <div className="mt-5 grid grid-cols-2 gap-3">
           {filtered.map((r, i) => {
-            const bg = EMOJI_BG[r.emoji || ''] || 'from-bg to-primary-soft'
+            const bg = emojiBg(r.emoji)
             return (
               <motion.div
                 key={r.id}
