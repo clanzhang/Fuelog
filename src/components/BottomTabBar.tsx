@@ -10,7 +10,13 @@ const tabs: { path: string; label: string; icon: SolarIconName; activeIcon: Sola
   { path: '/profile', label: 'Profile', icon: 'user-circle', activeIcon: 'user-circle' },
 ]
 
-export default function BottomTabBar({ onFab }: { onFab: () => void }) {
+export default function BottomTabBar({
+  onFab,
+  inputOpen,
+}: {
+  onFab: () => void
+  inputOpen?: boolean
+}) {
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -21,12 +27,12 @@ export default function BottomTabBar({ onFab }: { onFab: () => void }) {
           <TabButton key={t.path} {...t} active={location.pathname === t.path} onClick={() => navigate(t.path)} />
         ))}
 
-        {/* FAB */}
+        {/* FAB：点击展开/收起输入面板，旋转 45° 变"×" */}
         <motion.button
           onClick={onFab}
           whileTap={{ scale: 0.9 }}
-          animate={{ scale: [1, 0.9, 1.1, 1] }}
-          transition={{ duration: 0.4, times: [0, 0.3, 0.6, 1] }}
+          animate={{ rotate: inputOpen ? 45 : 0 }}
+          transition={{ duration: 0.3 }}
           className="relative -top-7 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary-dark text-white shadow-fab"
           aria-label="添加食物"
         >

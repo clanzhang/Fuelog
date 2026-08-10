@@ -1,10 +1,10 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import SolarIcon from './SolarIcon'
 import { quickLog, type QuickLogResult, type QuickFoodItem } from '../utils/quicklog'
 import { MEAL_LABEL } from '../types'
 
-// Web Speech API 类型声明（部分浏览器未在 TS lib 中包含）
+// Web Speech API 类型声明
 interface SpeechRecognitionEventLike {
   results: { [index: number]: { [index: number]: { transcript: string } } }
 }
@@ -29,16 +29,18 @@ function getSpeechRecognition(): SpeechRecognitionConstructor | null {
 }
 
 /**
- * 一句话快速记录组件（"+" 展开动画版）
- * 默认只显示一个"+"按钮，点击展开输入面板：语音（长按）或文字输入
- * → AI 解析 → 本地营养计算 → 确认卡片 → onConfirm 回调
+ * 快速记录输入面板（底部滑入）
+ * 由全局"+"按钮控制开关：语音（长按）或文字输入 → AI 解析 → 确认卡片 → onConfirm
  */
-export default function QuickLogInput({
+export default function QuickInputPanel({
+  open,
+  onClose,
   onConfirm,
 }: {
+  open: boolean
+  onClose: () => void
   onConfirm: (result: QuickLogResult) => void
 }) {
-  const [isExpanded, setIsExpanded] = useState(false)
   const [text, setText] = useState('')
   const [parsing, setParsing] = useState(false)
   const [result, setResult] = useState<QuickLogResult | null>(null)
@@ -47,6 +49,15 @@ export default function QuickLogInput({
   const [amountEdits, setAmountEdits] = useState<Record<number, number>>({})
   const recogRef = useRef<SpeechRecognitionLike | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // 打开面板时聚焦输入框
+  useEffect(() => {
+    if (open) {
+      setResult(null)
+      setErrorMsg('')
+      setTimeout(() => inputRef.current?.focus(), 300)
+    }
+  }, [open])
 
   // 根据时间变化的 placeholder
   const placeholder = (() => {
@@ -73,7 +84,7 @@ export default function QuickLogInput({
       recog.onresult = (e) => {
         const transcript = e.results[0]?.[0]?.transcript ?? ''
         if (transcript) {
-          setText(transcript) // 识别结果填入输入框，用户可修改
+          setText(transcript)
         } else {
           setErrorMsg('没听清，请重试')
         }
@@ -152,40 +163,46 @@ export default function QuickLogInput({
       totalCarbs: effectiveTotal.carbs,
       totalFat: effectiveTotal.fat,
     })
-    // 重置 + 自动收起面板
+    // 重置 + 关闭面板
     setResult(null)
     setText('')
     setAmountEdits({})
-    setIsExpanded(false)
+    onClose()
   }
 
   return (
-    <div className="flex flex-col items-center">
-      {/* "+"按钮：点击旋转 45° 变"×"，展开/收起面板 */}
-      <motion.button
-        animate={{ rotate: isExpanded ? 45 : 0 }}
-        transition={{ duration: 0.3 }}
-        onClick={() => {
-          setIsExpanded(!isExpanded)
-          setErrorMsg('')
-        }}
-        className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg"
-        aria-label={isExpanded ? '收起' : '添加记录'}
-      >
-        <SolarIcon name="add" size={28} />
-      </motion.button>
-
-      {/* 展开面板 */}
-      <AnimatePresence>
-        {isExpanded && (
+    <AnimatePresence>
+      {open && (
+        <>
+          {/* 遮罩：点击关闭 */}
           <motion.div
-            initial={{ opacity: 0, height: 0, marginTop: 0 }}
-            animate={{ opacity: 1, height: 'auto', marginTop: 16 }}
-            exit={{ opacity: 0, height: 0, marginTop: 0 }}
-            transition={{ duration: 0.3, ease: 'easeInOut' }}
-            className="w-full overflow-hidden"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="absolute inset-0 z-40 bg-black/40"
+          />
+          {/* 底部面板 */}
+          <motion.div
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+            className="absolute inset-x-0 bottom-0 z-50 mx-auto w-full max-w-[430px]"
           >
-            <div className="rounded-2xl bg-surface p-6 shadow-lg">
+            <div className="max-h-[50vh] overflow-y-auto rounded-t-3xl bg-surface p-6 pb-8 shadow-2xl">
+              {/* 顶部把手 + 关闭 */}
+              <div className="mb-3 flex items-center justify-between">
+                <div className="mx-auto h-1.5 w-10 rounded-full bg-ink/10" />
+                <button
+                  onClick={onClose}
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-bg text-ink/50"
+                  aria-label="关闭输入面板"
+                >
+                  <SolarIcon name="close" size={18} />
+                </button>
+              </div>
+
               {/* 语音输入（长按） */}
               <motion.button
                 whileTap={{ scale: 0.95 }}
@@ -260,88 +277,88 @@ export default function QuickLogInput({
 
               {/* v0.0.2 提示 */}
               <p className="mt-4 text-center text-xs text-ink/35">v0.0.2 即将支持拍照识别 📷</p>
-            </div>
 
-            {/* 确认卡片 */}
-            <AnimatePresence>
-              {result && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 20 }}
-                  className="mt-3 overflow-hidden rounded-2xl border border-primary/15 bg-surface shadow-card"
-                >
-                  <div className="border-b border-ink/5 px-4 py-3">
-                    <p className="text-xs font-bold text-ink/50">
-                      {MEAL_LABEL[result.mealType]} · 解析结果
-                    </p>
-                  </div>
-                  <div className="space-y-3 px-4 py-3">
-                    {effectiveItems.map((item, i) => (
-                      <div key={i} className="flex items-center gap-3">
-                        <span className="text-2xl">{item.emoji}</span>
-                        <div className="flex-1">
-                          <p className="text-sm font-bold text-ink">
-                            {item.name} × {item.amount}{item.unit}
-                            {item.isEstimated && (
-                              <span className="ml-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600">
-                                AI 估算
-                              </span>
-                            )}
-                          </p>
-                          <p className="text-[11px] text-ink/45">
-                            蛋白 {item.protein}g · 碳水 {item.carbs}g · 脂肪 {item.fat}g
-                          </p>
+              {/* 确认卡片 */}
+              <AnimatePresence>
+                {result && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 20 }}
+                    className="mt-4 overflow-hidden rounded-2xl border border-primary/15 bg-bg/50"
+                  >
+                    <div className="border-b border-ink/5 px-4 py-3">
+                      <p className="text-xs font-bold text-ink/50">
+                        {MEAL_LABEL[result.mealType]} · 解析结果
+                      </p>
+                    </div>
+                    <div className="space-y-3 px-4 py-3">
+                      {effectiveItems.map((item, i) => (
+                        <div key={i} className="flex items-center gap-3">
+                          <span className="text-2xl">{item.emoji}</span>
+                          <div className="flex-1">
+                            <p className="text-sm font-bold text-ink">
+                              {item.name} × {item.amount}{item.unit}
+                              {item.isEstimated && (
+                                <span className="ml-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600">
+                                  AI 估算
+                                </span>
+                              )}
+                            </p>
+                            <p className="text-[11px] text-ink/45">
+                              蛋白 {item.protein}g · 碳水 {item.carbs}g · 脂肪 {item.fat}g
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-display text-sm font-extrabold text-ink">{item.calories} kcal</p>
+                            <button
+                              onClick={() => {
+                                const input = window.prompt('修改数量（克/毫升）', String(item.amount))
+                                if (input) setAmount(i, Number(input))
+                              }}
+                              className="mt-0.5 text-[10px] font-semibold text-primary"
+                            >
+                              修改数量
+                            </button>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-display text-sm font-extrabold text-ink">{item.calories} kcal</p>
-                          <button
-                            onClick={() => {
-                              const input = window.prompt('修改数量（克/毫升）', String(item.amount))
-                              if (input) setAmount(i, Number(input))
-                            }}
-                            className="mt-0.5 text-[10px] font-semibold text-primary"
-                          >
-                            修改数量
-                          </button>
-                        </div>
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between bg-surface/80 px-4 py-3">
+                      <div>
+                        <p className="text-[11px] text-ink/45">合计</p>
+                        <p className="font-display text-lg font-extrabold text-primary">
+                          {effectiveTotal.calories} kcal
+                        </p>
+                        <p className="text-[10px] text-ink/40">
+                          蛋白 {effectiveTotal.protein}g · 碳水 {effectiveTotal.carbs}g · 脂肪 {effectiveTotal.fat}g
+                        </p>
                       </div>
-                    ))}
-                  </div>
-                  <div className="flex items-center justify-between bg-bg/60 px-4 py-3">
-                    <div>
-                      <p className="text-[11px] text-ink/45">合计</p>
-                      <p className="font-display text-lg font-extrabold text-primary">
-                        {effectiveTotal.calories} kcal
-                      </p>
-                      <p className="text-[10px] text-ink/40">
-                        蛋白 {effectiveTotal.protein}g · 碳水 {effectiveTotal.carbs}g · 脂肪 {effectiveTotal.fat}g
-                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setResult(null)
+                            setAmountEdits({})
+                          }}
+                          className="rounded-full bg-ink/5 px-5 py-2.5 text-xs font-semibold text-ink/60"
+                        >
+                          取消
+                        </button>
+                        <button
+                          onClick={confirm}
+                          className="rounded-full bg-primary px-5 py-2.5 text-xs font-bold text-white shadow-fab"
+                        >
+                          ✓ 确认记录
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          setResult(null)
-                          setAmountEdits({})
-                        }}
-                        className="rounded-full bg-ink/5 px-5 py-2.5 text-xs font-semibold text-ink/60"
-                      >
-                        取消
-                      </button>
-                      <button
-                        onClick={confirm}
-                        className="rounded-full bg-primary px-5 py-2.5 text-xs font-bold text-white shadow-fab"
-                      >
-                        ✓ 确认记录
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+        </>
+      )}
+    </AnimatePresence>
   )
 }
