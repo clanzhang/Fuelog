@@ -159,9 +159,9 @@ export default function RecipesPage() {
           <p className="mt-1 text-sm text-ink/45">AI 识别结果或食材选菜后可收藏</p>
           <button
             onClick={() => navigate('/ingredient-pick')}
-            className="mt-5 rounded-full bg-primary px-6 py-2.5 text-xs font-semibold text-white shadow-fab"
+            className="mt-3 text-sm text-ink/40 transition-colors hover:text-primary"
           >
-            🍳 选食材做菜
+            选食材做菜 →
           </button>
         </div>
       )}
