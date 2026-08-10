@@ -4,3 +4,5 @@ dist
 *.local
 .DS_Store
 *.tsbuildinfo
+# 设计文档（不入库）
+FUELOG_MVP_PROMPT_*.md

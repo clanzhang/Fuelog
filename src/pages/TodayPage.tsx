@@ -5,9 +5,11 @@ import SolarIcon from '../components/SolarIcon'
 import ProgressRing from '../components/ProgressRing'
 import CalendarModal from '../components/CalendarModal'
 import ActionSheet from '../components/ActionSheet'
+import QuickLogInput from '../components/QuickLogInput'
 import { useData, todayStr } from '../context/DataContext'
 import { EXERCISE_TYPES, WATER_TYPES, type HabitLog } from '../types'
 import { useNavigate } from 'react-router-dom'
+import type { QuickLogResult } from '../utils/quicklog'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -67,7 +69,7 @@ export default function TodayPage() {
   const [exerciseSheetOpen, setExerciseSheetOpen] = useState(false)
   const [exerciseType, setExerciseType] = useState('慢跑')
   const navigate = useNavigate()
-  const { foods, plans, settings, habits, getFoodsByDate, getPlansByDate, updateHabit } = useData()
+  const { foods, plans, settings, habits, getFoodsByDate, getPlansByDate, updateHabit, addFood } = useData()
 
   const dayFoods = getFoodsByDate(selected)
   const dayPlans = getPlansByDate(selected)
@@ -111,6 +113,26 @@ export default function TodayPage() {
   const waterCups = 4
   const waterPerCup = settings.waterGoal / waterCups
   const filledCups = dayHabit.waterIntake / waterPerCup
+
+  // 一句话快速记录确认 → 写入食物记录
+  const handleQuickLogConfirm = (result: QuickLogResult) => {
+    result.items.forEach((item) => {
+      addFood({
+        name: item.name,
+        emoji: item.emoji,
+        calories: item.calories,
+        carbs: item.carbs,
+        protein: item.protein,
+        fat: item.fat,
+        fiber: 0,
+        sugar: 0,
+        sodium: 0,
+        tips: item.isEstimated ? 'AI 估算营养' : '',
+        mealType: result.mealType,
+        date: selected,
+      })
+    })
+  }
 
   return (
     <Page>
@@ -209,6 +231,11 @@ export default function TodayPage() {
               )
             })}
           </div>
+        </motion.div>
+
+        {/* 一句话快速记录 */}
+        <motion.div variants={item} className="mt-5">
+          <QuickLogInput onConfirm={handleQuickLogConfirm} />
         </motion.div>
 
         {/* 习惯追踪 */}

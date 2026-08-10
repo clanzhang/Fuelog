@@ -58,6 +58,7 @@ import repeat from '@iconify/icons-solar/repeat-bold'
 import cloud from '@iconify/icons-solar/cloud-bold'
 import logout from '@iconify/icons-solar/logout-2-bold'
 import login from '@iconify/icons-solar/login-2-bold'
+import microphone from '@iconify/icons-solar/microphone-bold'
 
 const icons = {
   'home': homeSmile,
@@ -120,6 +121,7 @@ const icons = {
   'cloud': cloud,
   'logout': logout,
   'login': login,
+  'microphone': microphone,
 }
 
 export type SolarIconName = keyof typeof icons
