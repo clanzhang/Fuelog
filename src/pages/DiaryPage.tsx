@@ -1,45 +1,14 @@
-import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import Page from '../components/Page'
 import SolarIcon from '../components/SolarIcon'
 import FoodStickerCard from '../components/FoodStickerCard'
-import { useData, todayStr } from '../context/DataContext'
 import { MEAL_LABEL, type MealType } from '../types'
+import useDayDiary from '../hooks/useDayDiary'
 import { useNavigate } from 'react-router-dom'
-
-function getWeekDates(anchor: string): { date: string; day: number; weekday: string; isToday: boolean }[] {
-  const d = new Date(anchor + 'T00:00:00')
-  const mondayOffset = (d.getDay() + 6) % 7
-  const monday = new Date(d)
-  monday.setDate(d.getDate() - mondayOffset)
-  const weekdays = ['一', '二', '三', '四', '五', '六', '日']
-  return Array.from({ length: 7 }, (_, i) => {
-    const dt = new Date(monday)
-    dt.setDate(monday.getDate() + i)
-    // 注意：不能用 toISOString()，它会按 UTC 时区偏移一天（东八区会取到前一天）
-    // 用本地日期格式化，保证 date 与显示的数字一致
-    const y = dt.getFullYear()
-    const m = String(dt.getMonth() + 1).padStart(2, '0')
-    const day = String(dt.getDate()).padStart(2, '0')
-    const iso = `${y}-${m}-${day}`
-    return {
-      date: iso,
-      day: dt.getDate(),
-      weekday: weekdays[i],
-      isToday: iso === todayStr(),
-    }
-  })
-}
 
 export default function DiaryPage() {
   const navigate = useNavigate()
-  const [selected, setSelected] = useState(todayStr())
-  const week = useMemo(() => getWeekDates(selected), [selected])
-  const { settings, deleteFood, getFoodsByDate } = useData()
-
-  const dayFoods = getFoodsByDate(selected)
-  const consumed = dayFoods.reduce((s, f) => s + f.calories, 0)
-  const remaining = settings.dailyCalorieGoal - consumed
+  const { selected, setSelected, week, dayFoods, consumed, remaining, calorieGoal, deleteFood } = useDayDiary()
 
   return (
     <Page>
@@ -86,7 +55,7 @@ export default function DiaryPage() {
           <p className="text-xs font-semibold text-ink/45">总摄入 (kcal)</p>
           <p className="mt-1 font-display text-[28px] font-extrabold leading-none text-ink">
             {consumed}
-            <span className="text-lg font-bold text-ink/30"> / {settings.dailyCalorieGoal}</span>
+            <span className="text-lg font-bold text-ink/30"> / {calorieGoal}</span>
           </p>
         </div>
         <div className="flex items-center gap-1 rounded-full bg-primary-soft px-3 py-2">
