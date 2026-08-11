@@ -7,6 +7,7 @@ import CalendarModal from '../components/CalendarModal'
 import ActionSheet from '../components/ActionSheet'
 import { useData, todayStr } from '../context/DataContext'
 import { EXERCISE_TYPES, WATER_TYPES, type HabitLog } from '../types'
+import { WATER_LABEL, WATER_ICON, WATER_QUICK, EXERCISE_QUICK } from '../utils/habits'
 import { useNavigate } from 'react-router-dom'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -48,17 +49,6 @@ const item = {
   hidden: { opacity: 0, y: 20 },
   show: { opacity: 1, y: 0, transition: { duration: 0.4 } },
 }
-
-const WATER_LABEL: Record<string, string> = { water: '水', tea: '茶', coffee: '咖啡' }
-const WATER_ICON: Record<string, string> = { water: 'water', tea: 'tea', coffee: 'coffee' }
-// 饮水快捷选项（ml）
-const WATER_QUICK = [
-  { key: '250', label: '+250ml', hint: '一杯', icon: 'water' },
-  { key: '500', label: '+500ml', hint: '一瓶', icon: 'water' },
-  { key: '750', label: '+750ml', hint: '一大杯', icon: 'water' },
-]
-// 运动快捷时长（分钟）
-const EXERCISE_QUICK = [10, 20, 30, 45, 60]
 
 export default function TodayPage() {
   const [calendarOpen, setCalendarOpen] = useState(false)
