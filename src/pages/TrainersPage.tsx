@@ -1,63 +1,36 @@
-import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip } from 'recharts'
 import Page from '../components/Page'
 import SolarIcon from '../components/SolarIcon'
-import { useData, todayStr } from '../context/DataContext'
 import { TRAINING_ICONS } from '../types'
 import ActionSheet from '../components/ActionSheet'
-
-const WEEK_LABEL = ['一', '二', '三', '四', '五', '六', '日']
+import useTrainerPlans from '../hooks/useTrainerPlans'
 
 export default function TrainersPage() {
-  const { plans, addPlan, deletePlan, updatePlan } = useData()
-  const [formOpen, setFormOpen] = useState(false)
-  const [name, setName] = useState('')
-  const [icon, setIcon] = useState('dumbbell')
-  const [time, setTime] = useState('10:00')
-  const [duration, setDuration] = useState('30')
-  const [warmup, setWarmup] = useState('5')
-  const [calories, setCalories] = useState('200')
-  const [date, setDate] = useState(todayStr())
-
-  // 本周柱状图：从训练计划按日期聚合
-  const weekChart = useMemo(() => {
-    const today = new Date(todayStr() + 'T00:00:00')
-    const mondayOffset = (today.getDay() + 6) % 7
-    const monday = new Date(today)
-    monday.setDate(today.getDate() - mondayOffset)
-    return WEEK_LABEL.map((label, i) => {
-      const d = new Date(monday)
-      d.setDate(monday.getDate() + i)
-      // 用本地日期格式化（toISOString 会按 UTC 偏移一天）
-      const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-      const burned = plans
-        .filter((p) => p.date === iso)
-        .reduce((s, p) => s + p.caloriesBurned, 0)
-      return { day: label, burned, isToday: iso === todayStr() }
-    })
-  }, [plans])
-
-  const totalBurned = weekChart.reduce((s, d) => s + d.burned, 0)
-
-  const submitPlan = () => {
-    if (!name.trim()) return
-    addPlan({
-      name: name.trim(),
-      icon,
-      time,
-      duration: Number(duration) || 0,
-      warmup: Number(warmup) || 0,
-      caloriesBurned: Number(calories) || 0,
-      date,
-    })
-    setFormOpen(false)
-    setName('')
-    setIcon('dumbbell')
-    setDuration('30')
-    setWarmup('5')
-    setCalories('200')
-  }
+  const {
+    formOpen,
+    setFormOpen,
+    name,
+    setName,
+    icon,
+    setIcon,
+    time,
+    setTime,
+    duration,
+    setDuration,
+    warmup,
+    setWarmup,
+    calories,
+    setCalories,
+    date,
+    setDate,
+    plans,
+    weekChart,
+    totalBurned,
+    submitPlan,
+    togglePlan,
+    removePlan,
+  } = useTrainerPlans()
 
   return (
     <Page>
@@ -134,7 +107,7 @@ export default function TrainersPage() {
               className={`flex items-center gap-3 rounded-2xl p-4 shadow-card ${i % 2 === 0 ? 'bg-primary-soft' : 'bg-[#F8F8FC]'}`}
             >
               <button
-                onClick={() => updatePlan(p.id, { completed: !p.completed })}
+                onClick={() => togglePlan(p.id)}
                 className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
                   p.completed ? 'border-primary bg-primary text-white' : 'border-ink/20'
                 }`}
@@ -157,7 +130,7 @@ export default function TrainersPage() {
                 <p className="text-[10px] text-ink/40">kcal</p>
               </div>
               <button
-                onClick={() => deletePlan(p.id)}
+                onClick={() => removePlan(p.id)}
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-50 text-rose-500 active:scale-90"
               >
                 <SolarIcon name="trash" size={14} />
