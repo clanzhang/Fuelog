@@ -1,20 +1,27 @@
-import { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import SolarIcon from '../components/SolarIcon'
 import NutritionGrid from '../components/NutritionGrid'
-import { useData } from '../context/DataContext'
 import { MEAL_LABEL, type MealType } from '../types'
+import useFoodDetail from '../hooks/useFoodDetail'
+import { useNavigate } from 'react-router-dom'
 
 export default function FoodDetailPage() {
-  const { id } = useParams()
   const navigate = useNavigate()
-  const { foods, updateFood, deleteFood } = useData()
-  const food = foods.find((f) => f.id === id)
-  const [editing, setEditing] = useState(false)
-  const [mealType, setMealType] = useState<MealType>(food?.mealType ?? 'lunch')
-  const [date, setDate] = useState(food?.date ?? '')
-  const [saved, setSaved] = useState(false)
+  const {
+    food,
+    editing,
+    mealType,
+    setMealType,
+    date,
+    setDate,
+    saved,
+    nutritionMap,
+    startEdit,
+    cancelEdit,
+    saveChanges,
+    handleDelete,
+    goBack,
+  } = useFoodDetail()
 
   if (!food) {
     return (
@@ -27,37 +34,11 @@ export default function FoodDetailPage() {
     )
   }
 
-  const nutritionMap = {
-    carbs: food.carbs,
-    protein: food.protein,
-    fat: food.fat,
-    fiber: food.fiber,
-    sugar: food.sugar,
-    salt: food.sodium,
-  }
-
-  const saveChanges = () => {
-    if (!food) return
-    // 名称/卡路里/营养素由 AI 定死，只能改餐类和日期
-    updateFood(food.id, { mealType, date })
-    setSaved(true)
-    setEditing(false)
-    setTimeout(() => setSaved(false), 1500)
-  }
-
-  const handleDelete = () => {
-    if (!food) return
-    if (window.confirm(`确定删除「${food.name}」吗？`)) {
-      deleteFood(food.id)
-      navigate('/diary')
-    }
-  }
-
   return (
     <div className="no-scrollbar h-full overflow-y-auto bg-bg pb-10">
       {/* 顶部栏 */}
       <div className="sticky top-0 z-10 flex items-center justify-between bg-bg/80 px-5 py-4 backdrop-blur-lg">
-        <button onClick={() => navigate(-1)} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-ink shadow-card">
+        <button onClick={goBack} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-ink shadow-card">
           <SolarIcon name="arrow-left" size={20} />
         </button>
         <span className="font-display text-sm font-bold text-ink">食物详情</span>
@@ -160,7 +141,7 @@ export default function FoodDetailPage() {
           {editing ? (
             <>
               <button
-                onClick={() => setEditing(false)}
+                onClick={cancelEdit}
                 className="flex flex-1 items-center justify-center gap-2 rounded-full border border-ink/10 bg-surface py-3.5 text-sm font-semibold text-ink"
               >
                 取消
@@ -175,11 +156,7 @@ export default function FoodDetailPage() {
           ) : (
             <>
               <button
-                onClick={() => {
-                  setMealType(food.mealType)
-                  setDate(food.date)
-                  setEditing(true)
-                }}
+                onClick={startEdit}
                 className="flex flex-1 items-center justify-center gap-2 rounded-full border border-ink/10 bg-surface py-3.5 text-sm font-semibold text-ink"
               >
                 <SolarIcon name="edit" size={16} /> 编辑
