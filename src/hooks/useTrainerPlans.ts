@@ -4,6 +4,16 @@ import type { TrainingPlan } from '../types'
 
 const WEEK_LABEL = ['一', '二', '三', '四', '五', '六', '日']
 
+export interface TrainerFormValues {
+  name: string
+  icon: string
+  time: string
+  duration: string
+  warmup: string
+  calories: string
+  date: string
+}
+
 export interface WeekChartItem {
   day: string
   burned: number
@@ -14,20 +24,8 @@ export interface TrainerPlans {
   // 表单状态
   formOpen: boolean
   setFormOpen: (v: boolean) => void
-  name: string
-  setName: (v: string) => void
-  icon: string
-  setIcon: (v: string) => void
-  time: string
-  setTime: (v: string) => void
-  duration: string
-  setDuration: (v: string) => void
-  warmup: string
-  setWarmup: (v: string) => void
-  calories: string
-  setCalories: (v: string) => void
-  date: string
-  setDate: (v: string) => void
+  values: TrainerFormValues
+  updateForm: (patch: Partial<TrainerFormValues>) => void
 
   // 数据与图表
   plans: TrainingPlan[]
@@ -55,6 +53,17 @@ export default function useTrainerPlans(): TrainerPlans {
   const [warmup, setWarmup] = useState('5')
   const [calories, setCalories] = useState('200')
   const [date, setDate] = useState(todayStr())
+
+  const values: TrainerFormValues = { name, icon, time, duration, warmup, calories, date }
+  const updateForm = (patch: Partial<TrainerFormValues>) => {
+    if ('name' in patch) setName(patch.name!)
+    if ('icon' in patch) setIcon(patch.icon!)
+    if ('time' in patch) setTime(patch.time!)
+    if ('duration' in patch) setDuration(patch.duration!)
+    if ('warmup' in patch) setWarmup(patch.warmup!)
+    if ('calories' in patch) setCalories(patch.calories!)
+    if ('date' in patch) setDate(patch.date!)
+  }
 
   // 本周柱状图：从训练计划按日期聚合
   const weekChart = useMemo<WeekChartItem[]>(() => {
@@ -105,20 +114,8 @@ export default function useTrainerPlans(): TrainerPlans {
   return {
     formOpen,
     setFormOpen,
-    name,
-    setName,
-    icon,
-    setIcon,
-    time,
-    setTime,
-    duration,
-    setDuration,
-    warmup,
-    setWarmup,
-    calories,
-    setCalories,
-    date,
-    setDate,
+    values,
+    updateForm,
     plans,
     weekChart,
     totalBurned,
