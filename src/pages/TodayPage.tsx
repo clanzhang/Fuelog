@@ -7,26 +7,9 @@ import HabitCard from '../components/dashboard/HabitCard'
 import TrainingPlanList from '../components/dashboard/TrainingPlanList'
 import EmptyToday from '../components/dashboard/EmptyToday'
 import useDaySummary from '../hooks/useDaySummary'
+import { formatSubtitle } from '../utils/date'
+import { container, item } from '../utils/motion'
 import { useNavigate } from 'react-router-dom'
-
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-
-function formatSubtitle(dateStr: string) {
-  const d = new Date(dateStr + 'T00:00:00')
-  const day = d.getDate()
-  const weekday = WEEKDAYS[d.getDay()]
-  const month = d.toLocaleString('en-US', { month: 'short' })
-  return `${month} ${day} · ${weekday}`
-}
-
-const container = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.1 } },
-}
-const item = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.4 } },
-}
 
 export default function TodayPage() {
   const navigate = useNavigate()
