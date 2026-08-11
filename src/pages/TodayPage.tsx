@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { motion } from 'framer-motion'
 import Page, { PageHeader } from '../components/Page'
 import SolarIcon from '../components/SolarIcon'
@@ -7,8 +6,7 @@ import StatCard from '../components/dashboard/StatCard'
 import HabitCard from '../components/dashboard/HabitCard'
 import TrainingPlanList from '../components/dashboard/TrainingPlanList'
 import EmptyToday from '../components/dashboard/EmptyToday'
-import { useData, todayStr } from '../context/DataContext'
-import { type HabitLog } from '../types'
+import useDaySummary from '../hooks/useDaySummary'
 import { useNavigate } from 'react-router-dom'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -31,27 +29,23 @@ const item = {
 }
 
 export default function TodayPage() {
-  const [calendarOpen, setCalendarOpen] = useState(false)
-  const [selected, setSelected] = useState(todayStr())
   const navigate = useNavigate()
-  const { foods, plans, settings, habits, getFoodsByDate, getPlansByDate, updateHabit } = useData()
-
-  const dayFoods = getFoodsByDate(selected)
-  const dayPlans = getPlansByDate(selected)
-  const dayHabit: HabitLog = habits[selected] ?? {
-    waterIntake: 0,
-    waterType: 'water',
-    exerciseMinutes: 0,
-    exerciseType: '慢跑',
-  }
-
-  const consumed = dayFoods.reduce((s, f) => s + f.calories, 0)
-  const burned = dayPlans.reduce((s, p) => s + p.caloriesBurned, 0)
-  const carbs = dayFoods.reduce((s, f) => s + f.carbs, 0)
-  const protein = dayFoods.reduce((s, f) => s + f.protein, 0)
-  const fat = dayFoods.reduce((s, f) => s + f.fat, 0)
-
-  const datesWithData = [...new Set([...foods.map((f) => f.date), ...plans.map((p) => p.date)])]
+  const {
+    calendarOpen,
+    setCalendarOpen,
+    selected,
+    setSelected,
+    dayHabit,
+    dayPlans,
+    consumed,
+    burned,
+    carbs,
+    protein,
+    fat,
+    datesWithData,
+    updateDayHabit,
+    settings,
+  } = useDaySummary()
 
   return (
     <Page>
@@ -94,7 +88,7 @@ export default function TodayPage() {
             habit={dayHabit}
             waterGoal={settings.waterGoal}
             exerciseGoal={settings.exerciseGoal}
-            onUpdate={(patch) => updateHabit(selected, patch)}
+            onUpdate={updateDayHabit}
           />
         </motion.div>
 
