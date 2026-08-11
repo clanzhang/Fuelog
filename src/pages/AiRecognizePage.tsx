@@ -1,6 +1,7 @@
 import RecognizeHeader from '../components/RecognizeHeader'
 import RecognizeImageArea from '../components/RecognizeImageArea'
 import RecognizeControls from '../components/RecognizeControls'
+import RecognizeFileInputs from '../components/RecognizeFileInputs'
 import useRecognize from '../hooks/useRecognize'
 
 export default function AiRecognizePage() {
@@ -31,20 +32,10 @@ export default function AiRecognizePage() {
   return (
     <div className="flex h-full flex-col bg-[#1E1E2E]">
       {/* 兜底拍照/相册 input（无 state 直接访问时使用） */}
-      <input
-        ref={cameraRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={handleLocalPick}
-      />
-      <input
-        ref={galleryRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleLocalPick}
+      <RecognizeFileInputs
+        cameraRef={cameraRef}
+        galleryRef={galleryRef}
+        onPick={handleLocalPick}
       />
 
       {/* 顶部栏 */}
