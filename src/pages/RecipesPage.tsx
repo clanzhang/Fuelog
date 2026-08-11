@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import Page from '../components/Page'
-import SolarIcon from '../components/SolarIcon'
+import RecipeHeader from '../components/recipes/RecipeHeader'
 import RecipeBanner from '../components/recipes/RecipeBanner'
 import RecipeSearchBar from '../components/recipes/RecipeSearchBar'
 import RecipeGrid from '../components/recipes/RecipeGrid'
@@ -28,15 +28,7 @@ export default function RecipesPage() {
   return (
     <Page>
       {/* 顶部标题 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-black text-ink">健康食谱</h1>
-          <p className="mt-0.5 text-sm font-medium text-ink/45">收藏你的健康食谱</p>
-        </div>
-        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary-soft text-primary">
-          <SolarIcon name="book" size={20} />
-        </div>
-      </div>
+      <RecipeHeader />
 
       {/* "今天做什么" 入口横幅 */}
       <RecipeBanner onClick={() => navigate('/ingredient-pick')} />
